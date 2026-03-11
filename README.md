@@ -4,7 +4,7 @@ An AI-assisted weekday local audio briefing for the Lehigh Valley.
 
 ## Day-1 MVP Goal
 
-Produce a single ~5-minute audio briefing each weekday morning by pulling local source material, generating a script with AI, and converting it to speech — fully automated, no manual editing required.
+Produce a single ~5-minute audio briefing each weekday morning by pulling local source material, generating a draft script with AI, and converting it to speech — with human review before anything is published. The first episode will be a private dry run, not distributed.
 
 ## Core Content Sections
 
