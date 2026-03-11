@@ -1,0 +1,2 @@
+# Lehigh Valley Morning Briefing – day-1 dependencies
+# No scraping, API, TTS, or publishing deps yet.
