@@ -1,0 +1,16 @@
+name,type,url,section,priority,notes
+The Morning Call,rss,https://www.mcall.com/arcio/rss/,local_news,1,Primary Lehigh Valley daily newspaper
+LehighValleyLive / Express-Times,rss,https://www.lehighvalleylive.com/arc/outboundfeeds/rss/?outputType=xml,local_news,1,NJ Advance Media – LV regional coverage
+WFMZ News,rss,https://www.wfmz.com/search/?f=rss&t=article&c=news/lehigh-valley&l=50&s=start_time&sd=desc,local_news,1,Local TV station – Lehigh Valley section
+69 News (WFMZ),rss,https://www.wfmz.com/search/?f=rss&t=article&c=news&l=50&s=start_time&sd=desc,local_news,2,Broader WFMZ news feed as backup
+City of Allentown,web_scrape,https://www.allentownpa.gov/News,local_gov,2,Municipal press releases and notices
+City of Bethlehem,web_scrape,https://www.bethlehem-pa.gov/News,local_gov,2,Municipal press releases and notices
+City of Easton,web_scrape,https://www.easton-pa.com/news,local_gov,2,Municipal press releases and notices
+Lehigh County,web_scrape,https://www.lehighcounty.org/news,local_gov,2,County government updates
+Northampton County,web_scrape,https://www.northamptoncounty.org/news,local_gov,2,County government updates
+NWS Philadelphia (Lehigh Valley),api,https://api.weather.gov/gridpoints/PHI/67,75/forecast,weather,1,National Weather Service grid forecast for Allentown area
+NWS Alerts – Lehigh County,api,https://api.weather.gov/alerts/active?zone=PAC077,weather,1,Active weather alerts – Lehigh County
+NWS Alerts – Northampton County,api,https://api.weather.gov/alerts/active?zone=PAC095,weather,1,Active weather alerts – Northampton County
+PennDOT 511PA,api,https://511pa.com/api/traffic/Incidents?key=PENDING,traffic,1,Real-time traffic incidents – key required
+Lehigh Valley Planning Commission,web_scrape,https://www.lvpc.org/news.html,community,3,Regional planning and development news
+Discover Lehigh Valley,rss,https://www.discoverlehighvalley.com/blog/rss/,community,3,Local events and community happenings
