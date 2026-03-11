@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+raw/
+audio/
+episodes/
+logs/
+.DS_Store
