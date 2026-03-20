@@ -91,15 +91,14 @@ script_generation:
     - Target {target_words} words (around 5 minutes spoken).
 
     SOURCE ATTRIBUTION:
-    - In the EDITOR version: include [Source Name](URL) after key claims. Add editorial notes.
-    - In the SPEECH version: use natural spoken attribution sparingly ("According to the
-      Morning Call...", "the National Weather Service reports...") — only where it sounds
-      natural, not every sentence. No URLs, no brackets, no markdown.
+    - Include [Source Name](URL) after key claims so the reviewer can verify.
+    - Add editorial notes as blockquotes (> Editorial note: ...).
+    - Use section headers (## Lead, ## Weather, etc.).
 
-    You MUST produce two versions:
-    1. EDITOR version: markdown with source links, editorial notes as blockquotes, section headers.
-    2. SPEECH version: plain text optimized for text-to-speech. No markdown. Numbers written out.
-       Natural spoken cadence.
+    FORMAT:
+    - Markdown with source links and editorial notes.
+    - The speech version will be generated separately after human review, so focus
+      entirely on making this version clear, accurate, and easy to review/edit.
 
   user: |
     Today is {date} ({day_of_week}).
@@ -110,12 +109,11 @@ script_generation:
 
     Weather decision: {weather_decision_json}
 
-    Write the briefing. Start with a brief date-based opener. End with a quick closing.
-    Produce both EDITOR and SPEECH versions.
+    Write the briefing editor script. Start with a brief date-based opener. End with a quick closing.
+    Include source links and editorial notes.
 
     Respond with this exact JSON structure:
     {{
-      "editor_script": "<full editor version with markdown>",
-      "speech_script": "<full speech version, plain text, TTS-ready>",
+      "editor_script": "<full editor version with markdown, source links, and editorial notes>",
       "word_count": <int>
     }}

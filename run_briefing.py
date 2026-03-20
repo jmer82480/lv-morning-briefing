@@ -25,7 +25,7 @@ from pipeline.collectors.rss_collector import RSSCollector
 from pipeline.collectors.weather_collector import WeatherCollector
 from pipeline.normalize import normalize_items, save_normalized
 from pipeline.select_stories import select_stories
-from pipeline.generate_script import generate_scripts
+from pipeline.generate_script import generate_editor_script, generate_speech_script
 from pipeline.review import review_script
 from pipeline.generate_audio import generate_audio
 from pipeline.assemble_episode import assemble_episode
@@ -109,24 +109,36 @@ def run_select(
     )
 
 
-def run_generate_script(
+def run_generate_editor_script(
     editorial_decisions: dict,
     date_str: str,
     settings: dict,
     prompt_templates: dict,
-) -> tuple[str, str]:
-    """Stage 4: Generate editor + speech scripts."""
+) -> str:
+    """Stage 4a: Generate editor script (pre-review)."""
     logger = setup_logger(date_str)
-    logger.info(f"=== GENERATE SCRIPT ({date_str}) ===")
+    logger.info(f"=== GENERATE EDITOR SCRIPT ({date_str}) ===")
 
-    return generate_scripts(
+    return generate_editor_script(
         editorial_decisions, date_str, BASE_DIR, settings, prompt_templates
     )
 
 
-def run_review(editor_path: str, speech_path: str) -> bool:
+def run_generate_speech_script(
+    editor_path: str,
+    date_str: str,
+    settings: dict,
+) -> str:
+    """Stage 4b: Generate speech script from reviewed editor script (post-review)."""
+    logger = setup_logger(date_str)
+    logger.info(f"=== GENERATE SPEECH SCRIPT ({date_str}) ===")
+
+    return generate_speech_script(editor_path, date_str, BASE_DIR, settings)
+
+
+def run_review(editor_path: str) -> bool:
     """Stage 5: Human review gate."""
-    return review_script(editor_path, speech_path)
+    return review_script(editor_path)
 
 
 def run_audio(speech_path: str, date_str: str, settings: dict) -> str:
@@ -240,9 +252,9 @@ def main():
         )
         sys.exit(1)
 
-    # Stage 4: Generate scripts
+    # Stage 4a: Generate editor script (pre-review)
     try:
-        editor_path, speech_path = run_generate_script(
+        editor_path = run_generate_editor_script(
             editorial_decisions, date_str, settings, prompt_templates
         )
     except Exception as e:
@@ -254,14 +266,23 @@ def main():
         )
         sys.exit(1)
 
-    # Stage 5: Human review
+    # Stage 5: Human review (edits to editor script flow into speech version)
     if not args.skip_review:
-        approved = run_review(editor_path, speech_path)
+        approved = run_review(editor_path)
         if not approved:
-            print("\nBriefing aborted. Scripts are saved at:")
-            print(f"  Editor: {editor_path}")
-            print(f"  Speech: {speech_path}")
+            print(f"\nBriefing aborted. Editor script saved at: {editor_path}")
             return
+
+    # Stage 4b: Generate speech script from (possibly edited) editor script
+    try:
+        speech_path = run_generate_speech_script(editor_path, date_str, settings)
+    except Exception as e:
+        logger.error(
+            f"Speech script generation failed: {e}\n"
+            f"Editor script saved at: {editor_path}\n"
+            f"Re-run with --skip-collect to retry."
+        )
+        sys.exit(1)
 
     # Stage 6: Generate audio
     audio_path = None

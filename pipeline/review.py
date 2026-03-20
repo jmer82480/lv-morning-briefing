@@ -11,8 +11,11 @@ import sys
 logger = logging.getLogger("briefing")
 
 
-def review_script(editor_script_path: str, speech_script_path: str) -> bool:
+def review_script(editor_script_path: str) -> bool:
     """Open the editor script for human review. Returns True if approved.
+
+    The editor script is the single editable artifact. Any changes made here
+    will be reflected in the speech script, which is generated after approval.
 
     The operator can:
       - Press Enter to approve
@@ -23,10 +26,8 @@ def review_script(editor_script_path: str, speech_script_path: str) -> bool:
     print("HUMAN REVIEW")
     print("=" * 60)
     print(f"\nEditor script: {editor_script_path}")
-    print(f"Speech script: {speech_script_path}")
-    print("\nReview and edit the scripts before proceeding.")
-    print("The editor script has source links and editorial notes.")
-    print("The speech script is what will be read aloud.\n")
+    print("\nReview and edit the script. Source links and editorial notes are inline.")
+    print("Your edits will carry through to the spoken version and audio.\n")
 
     _open_in_editor(editor_script_path)
 

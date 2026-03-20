@@ -21,12 +21,11 @@ import json
 import logging
 import os
 import re
-import time
 from datetime import datetime, timezone
 
-import anthropic
-import yaml
 from rapidfuzz import fuzz
+
+from pipeline.model_io import call_claude_json
 
 logger = logging.getLogger("briefing")
 
@@ -315,47 +314,97 @@ def editorial_select(
 
     logger.info(f"Sending {len(clusters)} clusters to Claude for editorial selection...")
 
-    client = anthropic.Anthropic()
+    required_keys = {"selected_stories", "weather_decision", "cut_stories", "near_misses"}
+    decisions = call_claude_json(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        model=model,
+        max_tokens=max_tokens,
+        required_keys=required_keys,
+        label="editorial selection",
+    )
 
-    # Retry once on failure
-    for attempt in range(2):
-        try:
-            response = client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
+    # Add metadata
+    decisions["date"] = date_str
+    decisions["model"] = model
+    decisions["cluster_count"] = len(clusters)
+    decisions["raw_item_count"] = sum(len(c["members"]) for c in clusters)
+
+    logger.info(
+        f"Editorial selection complete: {len(decisions.get('selected_stories', []))} selected, "
+        f"{len(decisions.get('cut_stories', []))} cut, "
+        f"{len(decisions.get('near_misses', []))} near misses"
+    )
+    return decisions
+
+
+# ---------------------------------------------------------------------------
+# Phase C: Post-selection override enforcement
+# ---------------------------------------------------------------------------
+
+def enforce_overrides(decisions: dict, clusters: list[dict]) -> dict:
+    """Enforce manual overrides after Claude returns its selection.
+
+    Guarantees that:
+      - force_included clusters are present in selected_stories
+      - pinned_rank clusters have the correct rank
+    Claude's output is treated as a suggestion; overrides are deterministic.
+    """
+    selected = decisions.get("selected_stories", [])
+    selected_cluster_ids = {s.get("cluster_id") for s in selected}
+    patched = False
+
+    for cluster in clusters:
+        cid = cluster["cluster_id"]
+        rep = cluster["representative"]
+
+        # Enforce force-include: add missing stories
+        if cluster.get("force_included") and cid not in selected_cluster_ids:
+            logger.warning(
+                f"Override enforcement: force-including cluster {cid} "
+                f"({rep.get('headline', '')!r}) — Claude omitted it"
             )
+            pinned = cluster.get("pinned_rank")
+            entry = {
+                "rank": pinned or len(selected) + 1,
+                "cluster_id": cid,
+                "headline": rep.get("headline", ""),
+                "summary": rep.get("summary", ""),
+                "source_name": rep.get("source_name", ""),
+                "source_url": rep.get("source_url", ""),
+                "other_sources": [
+                    {"name": m.get("source_name", ""), "url": m.get("source_url", "")}
+                    for m in cluster["members"]
+                    if m.get("source_url") != rep.get("source_url")
+                ],
+                "section": rep.get("section", ""),
+                "editorial_note": "Force-included by manual override",
+                "why_it_matters": "Operator flagged this story as must-include",
+            }
+            selected.append(entry)
+            patched = True
 
-            response_text = response.content[0].text
+        # Enforce pinned rank
+        if cluster.get("pinned_rank") and cid in selected_cluster_ids:
+            target_rank = cluster["pinned_rank"]
+            for story in selected:
+                if story.get("cluster_id") == cid and story.get("rank") != target_rank:
+                    logger.warning(
+                        f"Override enforcement: pinning cluster {cid} "
+                        f"({rep.get('headline', '')!r}) to rank {target_rank} "
+                        f"(Claude assigned rank {story.get('rank')})"
+                    )
+                    story["rank"] = target_rank
+                    patched = True
 
-            # Extract JSON from response (handle markdown code blocks)
-            json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", response_text, re.DOTALL)
-            if json_match:
-                response_text = json_match.group(1)
+    if patched:
+        # Re-sort by rank and fix any rank collisions
+        selected.sort(key=lambda s: s.get("rank", 999))
+        for i, story in enumerate(selected):
+            story["rank"] = i + 1
+        decisions["selected_stories"] = selected
 
-            decisions = json.loads(response_text)
-
-            # Add metadata
-            decisions["date"] = date_str
-            decisions["model"] = model
-            decisions["cluster_count"] = len(clusters)
-            decisions["raw_item_count"] = sum(len(c["members"]) for c in clusters)
-
-            logger.info(
-                f"Editorial selection complete: {len(decisions.get('selected_stories', []))} selected, "
-                f"{len(decisions.get('cut_stories', []))} cut, "
-                f"{len(decisions.get('near_misses', []))} near misses"
-            )
-            return decisions
-
-        except (json.JSONDecodeError, anthropic.APIError, KeyError, IndexError) as e:
-            if attempt == 0:
-                logger.warning(f"Claude editorial selection failed (attempt 1): {e}. Retrying in 5s...")
-                time.sleep(5)
-            else:
-                logger.error(f"Claude editorial selection failed after retry: {e}")
-                raise
+    return decisions
 
 
 # ---------------------------------------------------------------------------
@@ -452,6 +501,9 @@ def select_stories(
     decisions = editorial_select(
         clusters, weather_items, date_str, prompt_templates, settings,
     )
+
+    # Phase C: Enforce overrides post-Claude
+    decisions = enforce_overrides(decisions, clusters)
 
     # Save editorial decisions
     save_editorial_decisions(decisions, date_str, base_dir)

@@ -3,7 +3,9 @@ ai:
   max_tokens: 4096
 
 tts:
-  voice: "onyx"
+  # ElevenLabs voice — use a friendly name (e.g., "adam", "rachel", "daniel")
+  # or a raw voice ID for custom/cloned voices.
+  voice: "adam"
 
 briefing:
   target_words: 750
