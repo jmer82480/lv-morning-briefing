@@ -1,0 +1,15 @@
+# Local name pronunciations for TTS.
+# Applied as find-and-replace in the speech script before sending to ElevenLabs.
+# Add entries as TTS mispronunciations are discovered.
+
+replacements:
+  Macungie: "muh-CUNG-ee"
+  Catasauqua: "cat-uh-SAW-kwuh"
+  Saucon: "SAW-kun"
+  Nazareth: "NAZ-uh-reth"
+  Coplay: "co-PLAY"
+  Hokendauqua: "ho-ken-DAW-kwuh"
+  Schnecksville: "SHNEX-vill"
+  Lehigh: "LEE-high"
+  Kutztown: "KOOTS-town"
+  Schuylkill: "SKOO-kull"

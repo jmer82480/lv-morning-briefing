@@ -1,0 +1,8 @@
+feedparser
+requests
+pyyaml
+anthropic
+elevenlabs
+python-dateutil
+python-dotenv
+rapidfuzz

@@ -1,0 +1,15 @@
+ai:
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 4096
+
+tts:
+  voice: "onyx"
+
+briefing:
+  target_words: 750
+  max_words: 1000
+  freshness_hours: 24
+
+clustering:
+  title_similarity_threshold: 75
+  time_window_hours: 6

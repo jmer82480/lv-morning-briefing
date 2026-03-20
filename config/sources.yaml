@@ -1,0 +1,40 @@
+sources:
+  - name: "Morning Call"
+    type: rss
+    url: "https://www.mcall.com/arcio/rss/"
+    section: local_news
+    enabled: true
+
+  - name: "LehighValleyLive"
+    type: rss
+    url: "https://www.lehighvalleylive.com/arc/outboundfeeds/rss/?outputType=xml"
+    section: local_news
+    enabled: true
+
+  - name: "WFMZ"
+    type: rss
+    url: "https://www.wfmz.com/search/?f=rss&t=article&c=news/area&l=50&s=start_time&sd=desc"
+    section: local_news
+    enabled: true
+
+  - name: "WLVR"
+    type: rss
+    url: "https://www.wlvr.org/feed/"
+    section: local_news
+    enabled: true
+
+  - name: "NWS Forecast"
+    type: weather_api
+    url: "https://api.weather.gov/gridpoints/PHI/67,75/forecast"
+    section: weather
+    enabled: true
+    headers:
+      User-Agent: "LVMorningBriefing/1.0 (lvmorningbriefing@example.com)"
+
+  - name: "NWS Alerts"
+    type: weather_api
+    url: "https://api.weather.gov/alerts/active?zone=PAC077,PAC095"
+    section: weather
+    enabled: true
+    headers:
+      User-Agent: "LVMorningBriefing/1.0 (lvmorningbriefing@example.com)"

@@ -1,0 +1,14 @@
+# Manual editorial overrides — applied before Claude sees the candidates.
+# Uncomment and modify as needed.
+
+force_include: []
+  # - url: "https://..."
+  #   rank: 1
+
+force_exclude: []
+  # - url_pattern: "obituaries"
+  # - headline_pattern: "AP Wire"
+
+pin_rank: []
+  # - headline_contains: "school board"
+  #   rank: 2
