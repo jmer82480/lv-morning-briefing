@@ -1,0 +1,47 @@
+[
+  {
+    "source_name": "WFMZ",
+    "source_url": "https://www.wfmz.com/news/area/lehighvalley/allentown-passes-tax-increase/article_abc123.html",
+    "section": "local_news",
+    "headline": "Allentown passes first tax increase in 4 years",
+    "summary": "Allentown City Council passed a 1.5-mill property tax increase in a 5-2 vote Tuesday evening. Mayor Johnson said the funds are critical for public safety and infrastructure.",
+    "body_text": null,
+    "published_at": "2026-03-19T23:00:00-04:00"
+  },
+  {
+    "source_name": "WFMZ",
+    "source_url": "https://www.wfmz.com/news/area/lehighvalley/lower-macungie-warehouse-fire/article_def456.html",
+    "section": "local_news",
+    "headline": "Early morning fire at Lower Macungie distribution center",
+    "summary": "Firefighters responded to a blaze at a distribution center in Lower Macungie Township early Wednesday. The fire was contained to the loading dock. No injuries were reported.",
+    "body_text": null,
+    "published_at": "2026-03-20T06:30:00-04:00"
+  },
+  {
+    "source_name": "WFMZ",
+    "source_url": "https://www.wfmz.com/news/area/lehighvalley/hellertown-police-pursuit/article_ghi789.html",
+    "section": "local_news",
+    "headline": "Police chase ends in crash on Route 412 in Hellertown",
+    "summary": "A police pursuit that began in Bethlehem ended in a single-vehicle crash on Route 412 in Hellertown Borough early Wednesday. The suspect, a 28-year-old Bethlehem man, was taken into custody with minor injuries. No bystanders were hurt.",
+    "body_text": null,
+    "published_at": "2026-03-20T07:45:00-04:00"
+  },
+  {
+    "source_name": "WFMZ",
+    "source_url": "https://www.wfmz.com/news/area/lehighvalley/catasauqua-bridge-inspection/article_jkl012.html",
+    "section": "local_news",
+    "headline": "Catasauqua bridge inspection to cause lane closures next week",
+    "summary": "PennDOT will conduct routine bridge inspections on the Race Street bridge in Catasauqua starting Monday. One lane will be closed in each direction during inspections, which are expected to last three days.",
+    "body_text": null,
+    "published_at": "2026-03-20T08:30:00-04:00"
+  },
+  {
+    "source_name": "WFMZ",
+    "source_url": "https://www.wfmz.com/news/area/lehighvalley/lvhn-easton-expansion/article_mno345.html",
+    "section": "local_news",
+    "headline": "LVHN breaks ground on major Easton hospital expansion",
+    "summary": "Lehigh Valley Health Network broke ground Wednesday on a $180 million expansion at its Easton campus, adding 120 new beds and a new cardiac unit.",
+    "body_text": null,
+    "published_at": "2026-03-20T09:15:00-04:00"
+  }
+]

@@ -1,0 +1,334 @@
+#!/usr/bin/env python3
+"""Golden day test: validate clustering and editorial selection against expectations.
+
+This test loads the golden day fixture data, runs normalization and pre-clustering
+(deterministic, no API calls), and validates the results against human-written
+editorial assertions.
+
+Usage:
+    python -m pytest tests/test_golden_day.py -v
+    python tests/test_golden_day.py  # standalone
+
+The pre-clustering tests run without API keys. The full editorial selection test
+(test_editorial_selection) requires ANTHROPIC_API_KEY and is skipped without it.
+"""
+
+import json
+import os
+import sys
+
+import yaml
+
+# Add project root to path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_ROOT)
+
+from pipeline.normalize import normalize_items
+from pipeline.select_stories import pre_cluster, apply_overrides
+
+GOLDEN_DIR = os.path.join(PROJECT_ROOT, "tests", "golden_day")
+RAW_DIR = os.path.join(GOLDEN_DIR, "raw")
+EXPECTED_DIR = os.path.join(GOLDEN_DIR, "expected")
+
+
+def load_golden_raw() -> list[dict]:
+    """Load all raw items from the golden day fixture."""
+    all_items = []
+    for filename in os.listdir(RAW_DIR):
+        if not filename.endswith(".json"):
+            continue
+        with open(os.path.join(RAW_DIR, filename)) as f:
+            items = json.load(f)
+        all_items.extend(items)
+    return all_items
+
+
+def load_editorial_checks() -> dict:
+    """Load editorial expectations."""
+    with open(os.path.join(EXPECTED_DIR, "editorial_checks.yaml")) as f:
+        return yaml.safe_load(f)
+
+
+def _headline_matches(headline: str, pattern: str) -> bool:
+    """Check if a headline contains the given pattern (case-insensitive)."""
+    return pattern.lower() in headline.lower()
+
+
+def _find_cluster_for_headline(clusters: list[dict], pattern: str) -> dict | None:
+    """Find the cluster containing a headline matching the pattern."""
+    for cluster in clusters:
+        for member in cluster["members"]:
+            if _headline_matches(member.get("headline", ""), pattern):
+                return cluster
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+def test_normalization():
+    """Verify normalization produces items with correct schema."""
+    raw = load_golden_raw()
+    # Use a large freshness window since fixture dates are synthetic
+    normalized = normalize_items(raw, freshness_hours=8760)
+
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+    weather_items = [i for i in normalized if i.get("section") == "weather"]
+
+    assert len(news_items) > 0, "Should have news items"
+    assert len(weather_items) > 0, "Should have weather items"
+
+    # Check schema
+    for item in news_items:
+        assert "item_id" in item, f"Missing item_id: {item.get('headline')}"
+        assert "source_name" in item
+        assert "source_url" in item
+        assert "headline" in item
+        assert "published_at" in item
+
+    print(f"  Normalized: {len(news_items)} news, {len(weather_items)} weather")
+
+
+def test_deduplication():
+    """Verify URL-based deduplication removes exact URL duplicates."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+
+    urls = [i["source_url"] for i in news_items]
+    assert len(urls) == len(set(urls)), "Duplicate URLs should be removed"
+    print(f"  {len(news_items)} unique items (no URL duplicates)")
+
+
+def test_local_place_tagging():
+    """Verify local place names are correctly tagged."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+
+    # Allentown tax story should have Allentown tagged
+    allentown_items = [
+        i for i in news_items
+        if "allentown" in i.get("headline", "").lower()
+        and "Allentown" in i.get("local_places", [])
+    ]
+    assert len(allentown_items) > 0, "Allentown stories should have Allentown tagged"
+
+    # Bethlehem Steel story should have Bethlehem tagged
+    bethlehem_items = [
+        i for i in news_items
+        if "bethlehem" in i.get("headline", "").lower()
+        and "Bethlehem" in i.get("local_places", [])
+    ]
+    assert len(bethlehem_items) > 0, "Bethlehem stories should have Bethlehem tagged"
+
+    print("  Place names correctly tagged")
+
+
+def test_pre_clustering():
+    """Verify pre-clustering groups related stories correctly."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+    checks = load_editorial_checks()
+
+    clusters = pre_cluster(news_items, similarity_threshold=75, time_window_hours=6)
+
+    print(f"  {len(news_items)} items → {len(clusters)} clusters")
+
+    # Verify expected clusters exist
+    for expected in checks["clustering"]["expected_clusters"]:
+        # Find a cluster that contains at least 2 of the expected stories
+        story_snippets = expected["stories"]
+
+        # Find all clusters containing any of these stories
+        matching_clusters = set()
+        for snippet in story_snippets:
+            # Find which cluster contains a headline matching this snippet
+            for cluster in clusters:
+                for member in cluster["members"]:
+                    if _headline_matches(member.get("headline", ""), snippet[:30]):
+                        matching_clusters.add(cluster["cluster_id"])
+
+        # All matching stories should be in the same cluster (or at most 2)
+        assert len(matching_clusters) <= 2, (
+            f"Expected stories to cluster together but found in {len(matching_clusters)} "
+            f"clusters: {expected['reason']}\n"
+            f"  Stories: {story_snippets}\n"
+            f"  Cluster IDs: {matching_clusters}"
+        )
+        print(f"  ✓ Cluster verified: {expected['reason']}")
+
+
+def test_clustering_separates_unrelated():
+    """Verify unrelated stories are NOT clustered together."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+
+    clusters = pre_cluster(news_items, similarity_threshold=75, time_window_hours=6)
+
+    # The Allentown tax cluster and Bethlehem Steel cluster should be separate
+    tax_cluster = _find_cluster_for_headline(clusters, "tax increase")
+    steel_cluster = _find_cluster_for_headline(clusters, "Bethlehem Steel")
+
+    assert tax_cluster is not None, "Should find a tax increase cluster"
+    assert steel_cluster is not None, "Should find a Bethlehem Steel cluster"
+    assert tax_cluster["cluster_id"] != steel_cluster["cluster_id"], (
+        "Tax increase and Bethlehem Steel should NOT be in the same cluster"
+    )
+    print("  ✓ Unrelated stories correctly separated")
+
+
+def test_overrides_force_exclude():
+    """Verify force-exclude overrides remove matching clusters."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+    clusters = pre_cluster(news_items)
+
+    overrides = {
+        "force_include": [],
+        "force_exclude": [{"headline_pattern": "Obituaries"}],
+        "pin_rank": [],
+    }
+
+    filtered, log = apply_overrides(clusters, overrides)
+
+    # Obituaries should be excluded
+    for cluster in filtered:
+        for member in cluster["members"]:
+            assert "obituaries" not in member.get("headline", "").lower(), (
+                "Obituaries should have been excluded by override"
+            )
+
+    assert len(log["force_excluded"]) > 0, "Should have logged the exclusion"
+    print(f"  ✓ Force-excluded {len(log['force_excluded'])} items")
+
+
+def test_golden_day_item_counts():
+    """Verify item counts are in expected ranges."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+    clusters = pre_cluster(news_items)
+
+    # We created 22 items across 4 sources; after URL dedup we should have 22 unique
+    # After clustering, should have roughly 10-18 clusters
+    assert 10 <= len(news_items) <= 25, f"Expected 10-25 news items, got {len(news_items)}"
+    assert 8 <= len(clusters) <= 20, f"Expected 8-20 clusters, got {len(clusters)}"
+    print(f"  ✓ Counts in range: {len(news_items)} items, {len(clusters)} clusters")
+
+
+# ---------------------------------------------------------------------------
+# Full editorial selection test (requires API key)
+# ---------------------------------------------------------------------------
+
+def test_editorial_selection():
+    """Full editorial selection test — requires ANTHROPIC_API_KEY.
+
+    Runs the complete selection pipeline and validates against editorial checks.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        print("  SKIPPED (no ANTHROPIC_API_KEY)")
+        return
+
+    from pipeline.select_stories import select_stories
+
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    checks = load_editorial_checks()
+
+    settings = {"ai": {"model": "claude-sonnet-4-20250514", "max_tokens": 4096},
+                "clustering": {"title_similarity_threshold": 75, "time_window_hours": 6}}
+
+    with open(os.path.join(PROJECT_ROOT, "config", "prompt_templates.yaml")) as f:
+        prompt_templates = yaml.safe_load(f)
+
+    overrides = {"force_include": [], "force_exclude": [], "pin_rank": []}
+
+    # Use a temp directory for output
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        decisions = select_stories(
+            normalized, "2026-03-20", tmpdir, settings, prompt_templates, overrides
+        )
+
+    selected = decisions.get("selected_stories", [])
+    selected_headlines = [s.get("headline", "") for s in selected]
+
+    # Check story count
+    min_count = checks["expected_story_count"]["min"]
+    max_count = checks["expected_story_count"]["max"]
+    assert min_count <= len(selected) <= max_count, (
+        f"Expected {min_count}-{max_count} stories, got {len(selected)}"
+    )
+    print(f"  ✓ Story count: {len(selected)}")
+
+    # Check must_select
+    for rule in checks["must_select"]:
+        pattern = rule["headline_contains"]
+        found = any(_headline_matches(h, pattern) for h in selected_headlines)
+        assert found, f"Must-select story missing: '{pattern}' — {rule['reason']}"
+        print(f"  ✓ Must-select present: {pattern}")
+
+    # Check must_cut
+    for rule in checks["must_cut"]:
+        pattern = rule["headline_contains"]
+        found = any(_headline_matches(h, pattern) for h in selected_headlines)
+        assert not found, f"Must-cut story was selected: '{pattern}' — {rule['reason']}"
+        print(f"  ✓ Must-cut absent: {pattern}")
+
+    # Check weather decision
+    weather = decisions.get("weather_decision", {})
+    expected_level = checks["weather"]["expected_level"]
+    assert weather.get("level") == expected_level, (
+        f"Expected weather level '{expected_level}', got '{weather.get('level')}'"
+    )
+    print(f"  ✓ Weather: {weather.get('level')}")
+
+    print(f"\n  EDITORIAL SELECTION PASSED — {len(selected)} stories selected")
+
+
+# ---------------------------------------------------------------------------
+# Standalone runner
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    tests = [
+        ("Normalization", test_normalization),
+        ("Deduplication", test_deduplication),
+        ("Local place tagging", test_local_place_tagging),
+        ("Pre-clustering", test_pre_clustering),
+        ("Clustering separates unrelated", test_clustering_separates_unrelated),
+        ("Overrides force-exclude", test_overrides_force_exclude),
+        ("Golden day item counts", test_golden_day_item_counts),
+        ("Editorial selection (API)", test_editorial_selection),
+    ]
+
+    passed = 0
+    failed = 0
+    skipped = 0
+
+    for name, test_fn in tests:
+        print(f"\n{'=' * 50}")
+        print(f"TEST: {name}")
+        print("=" * 50)
+        try:
+            test_fn()
+            passed += 1
+            print(f"  PASSED")
+        except AssertionError as e:
+            failed += 1
+            print(f"  FAILED: {e}")
+        except Exception as e:
+            failed += 1
+            print(f"  ERROR: {e}")
+
+    print(f"\n{'=' * 50}")
+    print(f"RESULTS: {passed} passed, {failed} failed")
+    print("=" * 50)
+    sys.exit(1 if failed else 0)

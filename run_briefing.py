@@ -165,9 +165,13 @@ def run_assemble(
     )
 
 
-def load_existing_raw(date_str: str) -> list[dict]:
-    """Load previously collected raw data from raw/{date}/."""
-    raw_dir = os.path.join(BASE_DIR, "raw", date_str)
+def load_existing_raw(date_str: str, raw_dir: str | None = None) -> list[dict]:
+    """Load previously collected raw data from a directory.
+
+    If raw_dir is not provided, defaults to raw/{date}/.
+    """
+    if raw_dir is None:
+        raw_dir = os.path.join(BASE_DIR, "raw", date_str)
     if not os.path.isdir(raw_dir):
         print(f"Error: No raw data found at {raw_dir}")
         sys.exit(1)
@@ -203,10 +207,17 @@ def main():
     args = parser.parse_args()
 
     date_str = args.date
+    is_golden = date_str == "golden"
+    if is_golden:
+        date_str = "2026-03-20"  # Fixed date for golden day fixture
+
     load_dotenv(os.path.join(BASE_DIR, ".env"))
 
     logger = setup_logger(date_str)
-    logger.info(f"Starting briefing pipeline for {date_str}")
+    if is_golden:
+        logger.info(f"Running GOLDEN DAY test fixture (date: {date_str})")
+    else:
+        logger.info(f"Starting briefing pipeline for {date_str}")
 
     # Load config
     sources_config = load_config("sources.yaml")
@@ -226,7 +237,11 @@ def main():
         return
 
     # Stage 1: Collect
-    if args.skip_collect:
+    if is_golden:
+        golden_raw_dir = os.path.join(BASE_DIR, "tests", "golden_day", "raw")
+        raw_items = load_existing_raw(date_str, raw_dir=golden_raw_dir)
+        logger.info("Loaded golden day fixture data (skipping live collection)")
+    elif args.skip_collect:
         raw_items = load_existing_raw(date_str)
     else:
         raw_items = run_collect(sources, date_str)

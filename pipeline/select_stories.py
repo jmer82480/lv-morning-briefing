@@ -34,11 +34,65 @@ logger = logging.getLogger("briefing")
 # Phase A: Deterministic pre-clustering
 # ---------------------------------------------------------------------------
 
+STOP_WORDS = {
+    "a", "an", "the", "in", "on", "at", "to", "for", "of", "and", "or",
+    "is", "are", "was", "were", "be", "been", "with", "by", "from", "as",
+    "its", "it", "this", "that", "will", "has", "have", "had", "not", "but",
+    "new", "says", "said", "after", "first", "also", "over", "into", "up",
+    "out", "about", "no", "more", "than", "other", "some", "all",
+}
+
+
 def _normalize_title(title: str) -> str:
     """Lowercase, strip punctuation, collapse whitespace for comparison."""
     title = title.lower()
     title = re.sub(r"[^\w\s]", "", title)
     return re.sub(r"\s+", " ", title).strip()
+
+
+def _content_words(title: str) -> set[str]:
+    """Extract meaningful content words from a title (no stop words)."""
+    words = _normalize_title(title).split()
+    return {w for w in words if w not in STOP_WORDS and len(w) > 2}
+
+
+def _similarity_score(item: dict, other: dict, time_window_hours: int) -> float:
+    """Compute a composite similarity score between two items.
+
+    Combines:
+      - Best of token_sort_ratio and token_set_ratio (handles different phrasings)
+      - Shared place-name bonus (+15 if items share a local place)
+      - Shared content-word bonus (+10 if 3+ meaningful words overlap)
+      - Time proximity bonus (+5 if published within window)
+    """
+    title_a = _normalize_title(item.get("headline", ""))
+    title_b = _normalize_title(other.get("headline", ""))
+
+    # Base: best of two fuzzy strategies
+    sort_score = fuzz.token_sort_ratio(title_a, title_b)
+    set_score = fuzz.token_set_ratio(title_a, title_b)
+    score = max(sort_score, set_score)
+
+    # Shared place-name bonus
+    places_a = set(item.get("local_places", []))
+    places_b = set(other.get("local_places", []))
+    if places_a and places_b and places_a & places_b:
+        score += 15
+
+    # Shared content-word bonus
+    words_a = _content_words(item.get("headline", ""))
+    words_b = _content_words(other.get("headline", ""))
+    shared_words = words_a & words_b
+    if len(shared_words) >= 3:
+        score += 10
+
+    # Time proximity bonus
+    pub_a = item.get("published_at", "")
+    pub_b = other.get("published_at", "")
+    if _within_time_window(pub_a, pub_b, time_window_hours):
+        score += 5
+
+    return score
 
 
 def pre_cluster(
@@ -47,6 +101,9 @@ def pre_cluster(
     time_window_hours: int = 6,
 ) -> list[dict]:
     """Group normalized news items into topic clusters using heuristics.
+
+    Uses a composite similarity score that combines fuzzy title matching,
+    shared place names, shared content words, and time proximity.
 
     Returns a list of cluster dicts, each with:
       cluster_id, representative, members, similarity_score, local_places, source_count
@@ -61,32 +118,15 @@ def pre_cluster(
         cluster_members = [item]
         assigned.add(i)
 
-        item_title = _normalize_title(item.get("headline", ""))
-        item_url = item.get("source_url", "")
-        item_pub = item.get("published_at", "")
-
         best_similarity = 0.0
 
         for j, other in enumerate(news_items):
             if j in assigned:
                 continue
 
-            other_title = _normalize_title(other.get("headline", ""))
-            other_url = other.get("source_url", "")
-            other_pub = other.get("published_at", "")
-
-            # Check title similarity
-            score = fuzz.token_sort_ratio(item_title, other_title)
-
-            # Check time proximity — boost similarity for temporally close items
-            time_close = _within_time_window(item_pub, other_pub, time_window_hours)
+            score = _similarity_score(item, other, time_window_hours)
 
             if score >= similarity_threshold:
-                cluster_members.append(other)
-                assigned.add(j)
-                best_similarity = max(best_similarity, score)
-            elif score >= similarity_threshold - 15 and time_close:
-                # Lower threshold if items are published close together
                 cluster_members.append(other)
                 assigned.add(j)
                 best_similarity = max(best_similarity, score)
