@@ -140,7 +140,6 @@ def generate_speech_script(
 
     speech_script = result.get("speech_script", "")
 
-    # Apply pronunciation substitutions
     speech_path = _save_script(speech_script, date_str, "speech", base_dir)
     return speech_path
 

@@ -1,5 +1,6 @@
 # Local name pronunciations for TTS.
-# Applied as find-and-replace in the speech script before sending to ElevenLabs.
+# Applied in-memory only — the saved speech script stays human-readable.
+# These replacements are applied just before the ElevenLabs API call.
 # Add entries as TTS mispronunciations are discovered.
 
 replacements:
