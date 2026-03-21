@@ -14,11 +14,12 @@ from datetime import date, datetime
 import streamlit as st
 from dotenv import load_dotenv
 
-load_dotenv()
-
 # ── Project root ─────────────────────────────────────────────────────────────
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Load .env explicitly from the project root (not dependent on CWD)
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
