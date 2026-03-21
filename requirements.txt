@@ -10,3 +10,4 @@ rapidfuzz>=3.0,<4
 
 # Dev / test
 pytest>=8.0,<9
+
