@@ -1,4 +1,7 @@
-"""Generate audio from the speech script using ElevenLabs TTS."""
+"""Generate audio from the speech script using ElevenLabs TTS.
+
+Tracks character count and file size for cost awareness.
+"""
 
 import logging
 import os
@@ -52,6 +55,19 @@ VOICE_ID_MAP = {
     "sam": "yoZ06aMxZJJ28mfd3POQ",
 }
 
+# Module-level TTS usage accumulator
+_tts_usage: dict = {}
+
+
+def get_tts_usage() -> dict:
+    """Return TTS usage stats from the last generate_audio call."""
+    return dict(_tts_usage)
+
+
+def reset_tts_usage():
+    """Reset TTS usage (call at pipeline start)."""
+    _tts_usage.clear()
+
 
 def resolve_voice_id(voice: str) -> str:
     """Resolve a friendly voice name to an ElevenLabs voice ID.
@@ -76,6 +92,7 @@ def generate_audio(
     """Convert the speech script to audio using ElevenLabs TTS.
 
     Returns the path to the generated audio file.
+    Logs character count and file size to the module-level usage tracker.
     """
     with open(speech_script_path) as f:
         text = f.read().strip()
@@ -85,8 +102,9 @@ def generate_audio(
 
     voice_setting = settings.get("tts", {}).get("voice", "rachel")
     voice_id = resolve_voice_id(voice_setting)
+    char_count = len(text)
 
-    logger.info(f"Generating audio ({len(text)} chars, voice: {voice_setting} → {voice_id})...")
+    logger.info(f"Generating audio ({char_count} chars, voice: {voice_setting} → {voice_id})...")
 
     client = ElevenLabs()
 
@@ -120,6 +138,17 @@ def generate_audio(
     with open(filepath, "wb") as f:
         f.write(audio_bytes)
 
-    size_mb = len(audio_bytes) / (1024 * 1024)
-    logger.info(f"Saved audio to {filepath} ({size_mb:.1f} MB)")
+    file_size_bytes = len(audio_bytes)
+    size_mb = file_size_bytes / (1024 * 1024)
+    logger.info(f"Saved audio to {filepath} ({size_mb:.1f} MB, {char_count} chars sent to TTS)")
+
+    # Track usage
+    _tts_usage.update({
+        "characters": char_count,
+        "file_size_bytes": file_size_bytes,
+        "file_size_mb": round(size_mb, 2),
+        "voice": voice_setting,
+        "voice_id": voice_id,
+    })
+
     return filepath

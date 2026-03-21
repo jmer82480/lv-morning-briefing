@@ -1,0 +1,32 @@
+[
+  {
+    "source_name": "NWS Alerts",
+    "section": "weather",
+    "type": "alert",
+    "event": "Severe Thunderstorm Warning",
+    "severity": "Severe",
+    "headline": "Severe Thunderstorm Warning for Lehigh and Northampton Counties until 8:00 PM EDT",
+    "description": "The National Weather Service has issued a Severe Thunderstorm Warning for Lehigh County and Northampton County until 8:00 PM EDT. At 1:45 PM, severe thunderstorms were located along a line extending from near Kutztown to near Coopersburg, moving east at 35 mph. HAZARD: 60 mph wind gusts and quarter size hail. SOURCE: Radar indicated. IMPACT: Minor damage to vehicles is possible. Expect damage to trees and powerlines.",
+    "areas": "Lehigh County, Northampton County"
+  },
+  {
+    "source_name": "NWS Alerts",
+    "section": "weather",
+    "type": "alert",
+    "event": "Flash Flood Watch",
+    "severity": "Moderate",
+    "headline": "Flash Flood Watch in effect through Tuesday morning for Lehigh Valley",
+    "description": "The National Weather Service has issued a Flash Flood Watch for portions of eastern Pennsylvania including Lehigh and Northampton counties. Heavy rainfall of 1 to 2 inches per hour is possible with thunderstorms. Urban and small stream flooding is the primary threat.",
+    "areas": "Lehigh County, Northampton County"
+  },
+  {
+    "source_name": "NWS Alerts",
+    "section": "weather",
+    "type": "alert",
+    "event": "Excessive Heat Warning",
+    "severity": "Severe",
+    "headline": "Excessive Heat Warning until 8 PM EDT Tuesday for Lehigh Valley",
+    "description": "Dangerously hot conditions with heat index values up to 105 degrees expected. The combination of hot temperatures and high humidity will create a dangerous situation. Drink plenty of fluids, stay in air-conditioned rooms, stay out of the sun, and check on relatives and neighbors.",
+    "areas": "Lehigh County, Northampton County"
+  }
+]

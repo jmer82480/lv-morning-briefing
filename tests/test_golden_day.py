@@ -24,7 +24,10 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 from pipeline.normalize import normalize_items
-from pipeline.select_stories import pre_cluster, apply_overrides
+from pipeline.select_stories import pre_cluster, apply_overrides, enforce_overrides
+
+sys.path.insert(0, PROJECT_ROOT)
+from run_briefing import validate_editorial_decisions, validate_script_file
 
 GOLDEN_DIR = os.path.join(PROJECT_ROOT, "tests", "golden_day")
 RAW_DIR = os.path.join(GOLDEN_DIR, "raw")
@@ -208,6 +211,152 @@ def test_overrides_force_exclude():
     print(f"  ✓ Force-excluded {len(log['force_excluded'])} items")
 
 
+def test_enforce_force_include():
+    """Verify enforce_overrides adds back a force-included story that Claude omitted."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+    clusters = pre_cluster(news_items)
+
+    # Mark the Bethlehem Steel cluster as force-included
+    steel_cluster = _find_cluster_for_headline(clusters, "Bethlehem Steel")
+    assert steel_cluster is not None, "Should find a Bethlehem Steel cluster"
+    steel_cluster["force_included"] = True
+
+    # Simulate Claude's decisions that OMIT the force-included cluster
+    fake_decisions = {
+        "selected_stories": [
+            {
+                "rank": 1,
+                "cluster_id": 999,  # some other cluster
+                "headline": "Unrelated story",
+            },
+        ],
+        "weather_decision": {"level": "one_liner"},
+        "cut_stories": [],
+        "near_misses": [],
+    }
+
+    result = enforce_overrides(fake_decisions, clusters)
+    selected_ids = {s["cluster_id"] for s in result["selected_stories"]}
+
+    assert steel_cluster["cluster_id"] in selected_ids, (
+        "Force-included Bethlehem Steel cluster should be in selected_stories "
+        "even when Claude omitted it"
+    )
+
+    # Verify the injected story has correct metadata
+    injected = [
+        s for s in result["selected_stories"]
+        if s["cluster_id"] == steel_cluster["cluster_id"]
+    ]
+    assert len(injected) == 1
+    assert "Bethlehem Steel" in injected[0]["headline"]
+    assert injected[0]["editorial_note"] == "Force-included by manual override"
+    print(f"  ✓ Force-included story added back after Claude omitted it")
+
+
+def test_enforce_pin_rank():
+    """Verify enforce_overrides corrects the rank when Claude ignores a pin."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+    clusters = pre_cluster(news_items)
+
+    # Mark the tax increase cluster as pinned to rank 1
+    tax_cluster = _find_cluster_for_headline(clusters, "tax increase")
+    assert tax_cluster is not None, "Should find a tax increase cluster"
+    tax_cluster["pinned_rank"] = 1
+
+    # Simulate Claude putting the tax story at rank 5 instead of 1
+    fake_decisions = {
+        "selected_stories": [
+            {"rank": 1, "cluster_id": 900, "headline": "Some other lead"},
+            {"rank": 2, "cluster_id": 901, "headline": "Another story"},
+            {"rank": 3, "cluster_id": 902, "headline": "Third story"},
+            {"rank": 4, "cluster_id": 903, "headline": "Fourth story"},
+            {
+                "rank": 5,
+                "cluster_id": tax_cluster["cluster_id"],
+                "headline": tax_cluster["representative"]["headline"],
+            },
+        ],
+        "weather_decision": {"level": "one_liner"},
+        "cut_stories": [],
+        "near_misses": [],
+    }
+
+    result = enforce_overrides(fake_decisions, clusters)
+
+    # The tax story should now be rank 1
+    tax_story = [
+        s for s in result["selected_stories"]
+        if s["cluster_id"] == tax_cluster["cluster_id"]
+    ]
+    assert len(tax_story) == 1
+    assert tax_story[0]["rank"] == 1, (
+        f"Pinned story should be rank 1, got rank {tax_story[0]['rank']}"
+    )
+
+    # All ranks should be sequential with no gaps
+    ranks = [s["rank"] for s in result["selected_stories"]]
+    assert ranks == list(range(1, len(ranks) + 1)), (
+        f"Ranks should be sequential after re-sort, got {ranks}"
+    )
+    print(f"  ✓ Pinned story moved to rank 1 (Claude had it at rank 5)")
+
+
+def test_validation_rejects_empty_selection():
+    """Verify validation catches zero selected stories."""
+    bad_decisions = {
+        "selected_stories": [],
+        "weather_decision": {"level": "one_liner"},
+        "cut_stories": [],
+        "near_misses": [],
+    }
+    try:
+        validate_editorial_decisions(bad_decisions)
+        assert False, "Should have raised ValueError for empty selection"
+    except ValueError as e:
+        assert "zero selected stories" in str(e).lower()
+        print(f"  ✓ Empty selection rejected: {e}")
+
+
+def test_validation_rejects_missing_headline():
+    """Verify validation catches stories without headlines."""
+    bad_decisions = {
+        "selected_stories": [
+            {"rank": 1, "cluster_id": 1, "headline": ""},  # empty headline
+        ],
+        "weather_decision": {"level": "one_liner"},
+        "cut_stories": [],
+        "near_misses": [],
+    }
+    try:
+        validate_editorial_decisions(bad_decisions)
+        assert False, "Should have raised ValueError for missing headline"
+    except ValueError as e:
+        assert "no headline" in str(e).lower()
+        print(f"  ✓ Missing headline rejected: {e}")
+
+
+def test_validation_rejects_empty_script():
+    """Verify script validation catches empty files."""
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+        f.write("short")
+        tmp_path = f.name
+
+    try:
+        validate_script_file(tmp_path, "test script", min_chars=100)
+        assert False, "Should have raised ValueError for short script"
+    except ValueError as e:
+        assert "characters" in str(e).lower()
+        print(f"  ✓ Empty script rejected: {e}")
+    finally:
+        os.unlink(tmp_path)
+
+
 def test_golden_day_item_counts():
     """Verify item counts are in expected ranges."""
     raw = load_golden_raw()
@@ -305,6 +454,11 @@ if __name__ == "__main__":
         ("Pre-clustering", test_pre_clustering),
         ("Clustering separates unrelated", test_clustering_separates_unrelated),
         ("Overrides force-exclude", test_overrides_force_exclude),
+        ("Enforce force-include post-Claude", test_enforce_force_include),
+        ("Enforce pin-rank post-Claude", test_enforce_pin_rank),
+        ("Validation: empty selection", test_validation_rejects_empty_selection),
+        ("Validation: missing headline", test_validation_rejects_missing_headline),
+        ("Validation: empty script", test_validation_rejects_empty_script),
         ("Golden day item counts", test_golden_day_item_counts),
         ("Editorial selection (API)", test_editorial_selection),
     ]

@@ -194,51 +194,57 @@ def apply_overrides(
         "rank_pinned": [],
     }
 
-    # Force-exclude: remove clusters matching URL or headline patterns
+    # Force-exclude: remove clusters where ANY member matches URL or headline patterns
     filtered = []
     for cluster in clusters:
-        rep = cluster["representative"]
-        url = rep.get("source_url", "")
-        headline = rep.get("headline", "")
         excluded = False
 
         for rule in force_exclude:
             url_pat = rule.get("url_pattern", "")
             headline_pat = rule.get("headline_pattern", "")
 
-            if url_pat and url_pat.lower() in url.lower():
-                log["force_excluded"].append(url)
-                excluded = True
-                break
-            if headline_pat and headline_pat.lower() in headline.lower():
-                log["force_excluded"].append(headline)
-                excluded = True
+            for member in cluster["members"]:
+                m_url = member.get("source_url", "")
+                m_headline = member.get("headline", "")
+
+                if url_pat and url_pat.lower() in m_url.lower():
+                    log["force_excluded"].append(m_headline or m_url)
+                    excluded = True
+                    break
+                if headline_pat and headline_pat.lower() in m_headline.lower():
+                    log["force_excluded"].append(m_headline)
+                    excluded = True
+                    break
+            if excluded:
                 break
 
         if not excluded:
             filtered.append(cluster)
 
-    # Force-include: mark clusters that match (they'll be passed to Claude with a flag)
+    # Force-include: mark clusters where ANY member URL matches
     for cluster in filtered:
-        rep = cluster["representative"]
-        url = rep.get("source_url", "")
-
         for rule in force_include:
-            if rule.get("url", "") == url:
-                cluster["force_included"] = True
-                cluster["pinned_rank"] = rule.get("rank")
-                log["force_included"].append(url)
+            rule_url = rule.get("url", "")
+            if not rule_url:
+                continue
+            for member in cluster["members"]:
+                if member.get("source_url", "") == rule_url:
+                    cluster["force_included"] = True
+                    cluster["pinned_rank"] = rule.get("rank")
+                    log["force_included"].append(rule_url)
+                    break
 
-    # Pin-rank: mark clusters matching headline patterns
+    # Pin-rank: mark clusters where ANY member headline matches
     for cluster in filtered:
-        rep = cluster["representative"]
-        headline = rep.get("headline", "")
-
         for rule in pin_rank:
             pattern = rule.get("headline_contains", "")
-            if pattern and pattern.lower() in headline.lower():
-                cluster["pinned_rank"] = rule.get("rank")
-                log["rank_pinned"].append(headline)
+            if not pattern:
+                continue
+            for member in cluster["members"]:
+                if pattern.lower() in member.get("headline", "").lower():
+                    cluster["pinned_rank"] = rule.get("rank")
+                    log["rank_pinned"].append(member.get("headline", ""))
+                    break
 
     logger.info(
         f"Overrides: {len(log['force_excluded'])} excluded, "
@@ -438,8 +444,14 @@ def enforce_overrides(decisions: dict, clusters: list[dict]) -> dict:
                     patched = True
 
     if patched:
-        # Re-sort by rank and fix any rank collisions
-        selected.sort(key=lambda s: s.get("rank", 999))
+        # Collect pinned cluster IDs so they win rank ties
+        pinned_cids = {
+            c["cluster_id"] for c in clusters if c.get("pinned_rank")
+        }
+        # Sort by rank, with pinned stories breaking ties first (0 < 1)
+        selected.sort(
+            key=lambda s: (s.get("rank", 999), 0 if s.get("cluster_id") in pinned_cids else 1)
+        )
         for i, story in enumerate(selected):
             story["rank"] = i + 1
         decisions["selected_stories"] = selected

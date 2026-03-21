@@ -1,4 +1,7 @@
-"""Hardened model I/O: Claude API calls with safe JSON extraction and validation."""
+"""Hardened model I/O: Claude API calls with safe JSON extraction and validation.
+
+Tracks token usage per call for cost awareness and observability.
+"""
 
 import json
 import logging
@@ -7,6 +10,31 @@ import time
 import anthropic
 
 logger = logging.getLogger("briefing")
+
+# Module-level usage accumulator — reset per pipeline run via reset_usage()
+_usage_log: list[dict] = []
+
+
+def get_usage_log() -> list[dict]:
+    """Return accumulated token usage from all Claude calls this run."""
+    return list(_usage_log)
+
+
+def get_total_usage() -> dict:
+    """Return total input/output tokens across all calls."""
+    total_input = sum(u.get("input_tokens", 0) for u in _usage_log)
+    total_output = sum(u.get("output_tokens", 0) for u in _usage_log)
+    return {
+        "calls": len(_usage_log),
+        "input_tokens": total_input,
+        "output_tokens": total_output,
+        "total_tokens": total_input + total_output,
+    }
+
+
+def reset_usage():
+    """Reset the usage log (call at pipeline start)."""
+    _usage_log.clear()
 
 
 def extract_json(text: str) -> dict:
@@ -98,6 +126,7 @@ def call_claude_json(
     """Call Claude and parse the response as JSON with validation.
 
     Retries once on failure (API error, parse error, or missing keys).
+    Logs token usage to the module-level accumulator.
     """
     client = anthropic.Anthropic()
 
@@ -109,6 +138,21 @@ def call_claude_json(
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
             )
+
+            # Log token usage
+            usage = getattr(response, "usage", None)
+            if usage:
+                usage_entry = {
+                    "label": label,
+                    "model": model,
+                    "input_tokens": getattr(usage, "input_tokens", 0),
+                    "output_tokens": getattr(usage, "output_tokens", 0),
+                }
+                _usage_log.append(usage_entry)
+                logger.info(
+                    f"  {label}: {usage_entry['input_tokens']} in / "
+                    f"{usage_entry['output_tokens']} out tokens"
+                )
 
             response_text = response.content[0].text
             result = extract_json(response_text)
