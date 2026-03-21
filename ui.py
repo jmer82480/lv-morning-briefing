@@ -330,8 +330,9 @@ elif btn_audio:
 elif btn_open:
     _open_path(_output_folder(ds))
 
-# Resume after overwrite confirmation (set during the previous cycle)
-if st.session_state.execute_mode:
+# Resume after overwrite confirmation (set during the previous cycle).
+# Only use execute_mode if no button was pressed this cycle.
+if not requested and st.session_state.execute_mode:
     requested = st.session_state.execute_mode
     st.session_state.execute_mode = None
 
@@ -495,6 +496,8 @@ if _decisions or _has_raw:
             try:
                 with open(os.path.join(_raw_dir, _fn)) as _f:
                     _items = json.load(_f)
+                if not isinstance(_items, list):
+                    continue
                 for _item in _items:
                     if _item.get("section") == "weather":
                         _weather_items += 1
