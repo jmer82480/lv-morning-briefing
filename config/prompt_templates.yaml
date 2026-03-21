@@ -9,8 +9,12 @@ story_selection:
     - Cut national/wire stories unless they have a specific, concrete local angle.
     - Cut stale stories (older than 24 hours) unless they are genuinely significant.
     - Cut low-impact items (minor traffic incidents, routine meeting agendas with no decisions).
-    - Prefer stories that affect residents' daily lives: government decisions, public safety,
-      business openings/closings, school impacts, infrastructure changes.
+    - Civic weight: prioritize stories with civic impact — government decisions, public safety,
+      infrastructure, local business changes — over soft features and entertainment.
+    - Source mix: when multiple outlets are available, draw from more than one rather than
+      over-relying on a single source. The source_count field shows multi-outlet coverage.
+    - Soft features and entertainment can fill the lineup when harder local news is thin,
+      but should not displace more impactful items.
     - Aim for section diversity — don't let one category dominate.
 
     WEATHER RULES:

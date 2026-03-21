@@ -12,6 +12,9 @@ import sys
 from datetime import date, datetime
 
 import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ── Project root ─────────────────────────────────────────────────────────────
 
@@ -91,9 +94,22 @@ def _any_outputs_exist(date_str: str) -> bool:
 
 
 def _output_folder(date_str: str) -> str:
-    """Best output folder for the date (episode dir if it exists)."""
+    """Best output folder for the date.
+
+    Priority: episodes/{date}/ → scripts/ (if date scripts exist) → project root.
+    """
     ep = _abs(f"episodes/{date_str}")
-    return ep if os.path.isdir(ep) else BASE_DIR
+    if os.path.isdir(ep):
+        return ep
+    # Scripts folder is the most useful target during review workflows
+    scripts = _abs("scripts")
+    if os.path.isdir(scripts):
+        try:
+            if any(f.startswith(date_str) for f in os.listdir(scripts)):
+                return scripts
+        except OSError:
+            pass
+    return BASE_DIR
 
 
 def _load_json(rel_path: str):
@@ -106,6 +122,18 @@ def _load_json(rel_path: str):
         except (json.JSONDecodeError, OSError):
             return None
     return None
+
+
+def _check_env_keys(mode: str) -> list[str]:
+    """Return missing env vars required for the selected mode."""
+    missing = []
+    if mode in ("full", "review_packet"):
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            missing.append("ANTHROPIC_API_KEY")
+    if mode in ("full", "audio_only"):
+        if not os.environ.get("ELEVENLABS_API_KEY"):
+            missing.append("ELEVENLABS_API_KEY")
+    return missing
 
 
 def _open_path(path: str):
@@ -216,6 +244,7 @@ for _key, _default in {
     "run_started": None,
     "run_finished": None,
     "execute_mode": None,
+    "run_success_msg": None,
 }.items():
     st.session_state.setdefault(_key, _default)
 
@@ -358,8 +387,17 @@ if requested:
     error_msg: str | None = None
     needs_confirm = False
 
+    # Auth preflight — fail fast with a clear message
+    missing_keys = _check_env_keys(requested)
+    if missing_keys:
+        names = ", ".join(missing_keys)
+        error_msg = (
+            f"Missing {names} in current environment or .env file. "
+            f"Add {'it' if len(missing_keys) == 1 else 'them'} before running."
+        )
+
     # Audio-only prerequisite
-    if requested == "audio_only":
+    if not error_msg and requested == "audio_only":
         if not os.path.isfile(_abs(f"scripts/{ds}_speech.md")):
             error_msg = (
                 "Audio could not run because the speech script was not "
@@ -421,19 +459,25 @@ if requested:
             if ok:
                 st.session_state.run_status = "Completed"
                 st.session_state.run_error = None
-                status_ctx.update(
-                    label=SUCCESS_MSG[requested], state="complete"
-                )
+                st.session_state.run_success_msg = SUCCESS_MSG[requested]
                 if opt_open_done:
                     _open_path(_output_folder(ds))
             else:
                 st.session_state.run_status = "Failed"
                 st.session_state.run_error = run_err
-                status_ctx.update(label="Run failed.", state="error")
+
+        # Rerun so the header, artifacts, and snapshot refresh with new data
+        st.rerun()
 
 # -- Persistent status row (always visible) --
 
 _s = st.session_state
+
+# Show completion banner from the run that just finished (survives rerun)
+if _s.get("run_success_msg"):
+    st.success(_s.run_success_msg)
+    st.session_state.run_success_msg = None
+
 sc1, sc2, sc3, sc4, sc5 = st.columns(5)
 sc1.metric("Status", _s.run_status)
 sc2.metric("Mode", _s.run_mode or "\u2014")
