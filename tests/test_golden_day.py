@@ -452,6 +452,75 @@ def test_enforce_force_include_with_pin():
     print(f"  ✓ Force-included story injected at pinned rank 2")
 
 
+def test_enforce_pin_rank_collision():
+    """Verify two stories pinned to the same rank: first wins slot, second shifts.
+
+    This is the documented collision policy: degrade gracefully, don't crash.
+    The second pin gets the next available slot after the contested rank.
+    """
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+    clusters = pre_cluster(news_items)
+
+    tax_cluster = _find_cluster_for_headline(clusters, "tax increase")
+    steel_cluster = _find_cluster_for_headline(clusters, "Bethlehem Steel")
+    assert tax_cluster is not None
+    assert steel_cluster is not None
+
+    # Both pinned to rank 2 — collision
+    tax_cluster["pinned_rank"] = 2
+    steel_cluster["pinned_rank"] = 2
+
+    fake_decisions = {
+        "selected_stories": [
+            {"rank": 1, "cluster_id": 900, "headline": "Lead story"},
+            {
+                "rank": 2,
+                "cluster_id": tax_cluster["cluster_id"],
+                "headline": tax_cluster["representative"]["headline"],
+            },
+            {
+                "rank": 3,
+                "cluster_id": steel_cluster["cluster_id"],
+                "headline": steel_cluster["representative"]["headline"],
+            },
+            {"rank": 4, "cluster_id": 903, "headline": "Fourth story"},
+        ],
+        "weather_decision": {"level": "one_liner"},
+        "cut_stories": [],
+        "near_misses": [],
+    }
+
+    result = enforce_overrides(fake_decisions, clusters)
+    selected = result["selected_stories"]
+
+    tax_story = [s for s in selected if s["cluster_id"] == tax_cluster["cluster_id"]]
+    steel_story = [s for s in selected if s["cluster_id"] == steel_cluster["cluster_id"]]
+
+    # Both must be present
+    assert len(tax_story) == 1
+    assert len(steel_story) == 1
+
+    # One gets rank 2, the other gets the next available slot
+    pin_ranks = {tax_story[0]["rank"], steel_story[0]["rank"]}
+    assert 2 in pin_ranks, (
+        f"At least one of the colliding pins should land at rank 2, got {pin_ranks}"
+    )
+    # They must have different ranks
+    assert tax_story[0]["rank"] != steel_story[0]["rank"], (
+        "Colliding pins should not both occupy the same final rank"
+    )
+
+    # All ranks sequential
+    ranks = [s["rank"] for s in selected]
+    assert ranks == list(range(1, len(ranks) + 1)), (
+        f"Ranks should be sequential, got {ranks}"
+    )
+    print(f"  ✓ Pin collision at rank 2: one got rank {min(pin_ranks)}, "
+          f"other shifted to rank {max(pin_ranks)}")
+
+
 def test_validation_rejects_empty_selection():
     """Verify validation catches zero selected stories."""
     bad_decisions = {
@@ -669,6 +738,7 @@ if __name__ == "__main__":
         ("Enforce pin-rank=3", test_enforce_pin_rank_mid_position),
         ("Enforce multiple pins", test_enforce_multiple_pins),
         ("Enforce force-include + pin", test_enforce_force_include_with_pin),
+        ("Enforce pin-rank collision", test_enforce_pin_rank_collision),
         ("Validation: empty selection", test_validation_rejects_empty_selection),
         ("Validation: missing headline", test_validation_rejects_missing_headline),
         ("Validation: empty script", test_validation_rejects_empty_script),

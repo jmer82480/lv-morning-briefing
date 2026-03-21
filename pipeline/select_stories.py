@@ -403,6 +403,11 @@ def enforce_overrides(decisions: dict, clusters: list[dict]) -> dict:
       3. Non-pinned stories fill remaining slots in Claude's original order.
       4. Final ranks are always sequential 1..N.
 
+    Pin-rank collision policy: if two stories pin to the same rank, the
+    first one (by cluster iteration order) gets the requested slot and the
+    second shifts to the next available slot. A warning is logged. This is
+    intentional — a config typo should degrade gracefully, not crash the run.
+
     Claude's output is treated as a suggestion; overrides are authoritative.
     """
     selected = list(decisions.get("selected_stories", []))
@@ -466,8 +471,14 @@ def enforce_overrides(decisions: dict, clusters: list[dict]) -> dict:
         slot = max(1, min(slot, total))  # clamp to [1, total]
         idx = slot - 1
         # If slot already taken by another pin, shift to next available
-        while result[idx] is not None:
-            idx = (idx + 1) % total
+        if result[idx] is not None:
+            logger.warning(
+                f"Override enforcement: pin-rank collision at rank {slot}. "
+                f"Cluster {story['cluster_id']} ({story.get('headline', '')!r}) "
+                f"shifts to next available slot."
+            )
+            while result[idx] is not None:
+                idx = (idx + 1) % total
         result[idx] = story
 
     # Fill remaining slots with unpinned stories in Claude's order
@@ -503,7 +514,7 @@ def save_pre_clusters(
 
     data = {
         "date": date_str,
-        "raw_item_count": raw_item_count,
+        "raw_news_item_count": raw_item_count,
         "cluster_count": len(clusters),
         "clusters": clusters,
         "unclustered": [c for c in clusters if len(c["members"]) == 1],
