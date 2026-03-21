@@ -245,6 +245,7 @@ for _key, _default in {
     "run_started": None,
     "run_finished": None,
     "execute_mode": None,
+    "pending_confirm": None,
     "run_success_msg": None,
 }.items():
     st.session_state.setdefault(_key, _default)
@@ -366,6 +367,7 @@ st.header("Current Run")
 # -- Determine which action was requested this render cycle --
 
 requested: str | None = None
+_from_confirm = False
 
 if btn_full:
     requested = "full"
@@ -376,17 +378,24 @@ elif btn_audio:
 elif btn_open:
     _open_path(_output_folder(ds))
 
-# Resume after overwrite confirmation (set during the previous cycle).
-# Only use execute_mode if no button was pressed this cycle.
-if not requested and st.session_state.execute_mode:
+# Resume after overwrite confirmation (set during a previous cycle).
+# The user already confirmed, so skip the overwrite check this time.
+if not requested and st.session_state.get("execute_mode"):
     requested = st.session_state.execute_mode
     st.session_state.execute_mode = None
+    _from_confirm = True
 
 # -- Validate & execute --
 
 if requested:
+    # Capture mode and clear stale state immediately, before any checks.
+    # This ensures the status row always shows the resolved mode.
+    label = MODE_LABELS[requested]
+    st.session_state.run_mode = label
+    st.session_state.run_error = None
+
     error_msg: str | None = None
-    needs_confirm = False
+    blocked_msg: str | None = None
 
     # Auth preflight — fail fast with a clear message
     missing_keys = _check_env_keys(requested)
@@ -405,9 +414,14 @@ if requested:
                 "found for this date."
             )
 
-    # Overwrite protection (skip for audio-only since it only touches audio/)
-    blocked_msg: str | None = None
-    if not error_msg and _any_outputs_exist(ds) and requested != "audio_only":
+    # Overwrite protection (skip for audio-only since it only touches audio/).
+    # Also skip when resuming from a confirmed overwrite (from_confirm=True).
+    if (
+        not error_msg
+        and not _from_confirm
+        and _any_outputs_exist(ds)
+        and requested != "audio_only"
+    ):
         if not opt_overwrite:
             blocked_msg = (
                 "Outputs already exist for this date. To run again, check "
@@ -415,7 +429,9 @@ if requested:
                 "Options above, then try again."
             )
         elif opt_confirm:
-            needs_confirm = True
+            # Store the resolved mode for the confirm dialog (rendered below,
+            # outside this block, so it survives Streamlit reruns).
+            st.session_state.pending_confirm = requested
 
     if error_msg:
         st.session_state.run_status = "Failed"
@@ -425,24 +441,12 @@ if requested:
         st.session_state.run_status = "Blocked"
         st.session_state.run_error = blocked_msg
 
-    elif needs_confirm:
-        st.warning(
-            "Outputs already exist for this date. Running again will "
-            "overwrite files."
-        )
-        cc1, cc2, _ = st.columns([1, 1, 6])
-        with cc1:
-            if st.button("Confirm"):
-                st.session_state.execute_mode = requested
-                st.rerun()
-        with cc2:
-            if st.button("Cancel"):
-                st.rerun()
+    elif st.session_state.get("pending_confirm"):
+        # Waiting for user to confirm overwrite — don't execute yet.
+        pass
 
     else:
         # ── Execute the pipeline ──────────────────────────────────────
-        label = MODE_LABELS[requested]
-        st.session_state.run_mode = label
         st.session_state.run_started = datetime.now().strftime("%I:%M:%S %p")
         st.session_state.run_finished = None
         st.session_state.run_error = None
@@ -474,6 +478,25 @@ if requested:
 
         # Rerun so the header, artifacts, and snapshot refresh with new data
         st.rerun()
+
+# -- Overwrite confirmation dialog (rendered outside the action block so
+#    clicking Confirm/Cancel triggers a clean rerun without losing state) --
+
+if st.session_state.get("pending_confirm"):
+    st.warning(
+        "Outputs already exist for this date. Running again will "
+        "overwrite files."
+    )
+    cc1, cc2, _ = st.columns([1, 1, 6])
+    with cc1:
+        if st.button("Confirm"):
+            st.session_state.execute_mode = st.session_state.pending_confirm
+            st.session_state.pending_confirm = None
+            st.rerun()
+    with cc2:
+        if st.button("Cancel"):
+            st.session_state.pending_confirm = None
+            st.rerun()
 
 # -- Persistent status row (always visible) --
 
