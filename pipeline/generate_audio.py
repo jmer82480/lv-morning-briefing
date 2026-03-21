@@ -1,5 +1,7 @@
 """Generate audio from the speech script using ElevenLabs TTS.
 
+Pronunciation normalization is applied in-memory just before the TTS call
+so that saved speech scripts stay human-readable.
 Tracks character count and file size for cost awareness.
 """
 
@@ -8,6 +10,8 @@ import os
 import time
 
 from elevenlabs import ElevenLabs
+
+from pipeline.pronunciation import apply_pronunciation, load_pronunciation
 
 logger = logging.getLogger("briefing")
 
@@ -99,6 +103,15 @@ def generate_audio(
 
     if not text:
         raise ValueError(f"Speech script is empty: {speech_script_path}")
+
+    # Apply pronunciation normalization in-memory only — the saved file
+    # stays human-readable; only the TTS engine hears the phonetic versions.
+    pronunciations = load_pronunciation(base_dir)
+    if pronunciations:
+        text = apply_pronunciation(text, pronunciations)
+        logger.info(
+            f"Applied {len(pronunciations)} pronunciation substitutions for TTS"
+        )
 
     voice_setting = settings.get("tts", {}).get("voice", "rachel")
     voice_id = resolve_voice_id(voice_setting)

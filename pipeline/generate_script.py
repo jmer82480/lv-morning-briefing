@@ -4,46 +4,23 @@ Two-phase process:
   1. generate_editor_script(): Claude produces the editor version from editorial decisions.
      Operator reviews and edits this file.
   2. generate_speech_script(): Claude converts the reviewed editor script into TTS-ready
-     plain text. Pronunciation substitutions are applied after.
+     plain text.
 
-This ensures human edits to the editor script flow into the spoken version.
+Saved speech scripts remain human-readable.  Pronunciation normalization
+is applied only at TTS time (see pipeline/pronunciation.py).
 """
 
 import json
 import logging
 import os
-import re
 import time
 from datetime import datetime
 
 import anthropic
-import yaml
 
 from pipeline.model_io import call_claude_json
 
 logger = logging.getLogger("briefing")
-
-
-def _load_pronunciation(base_dir: str) -> dict[str, str]:
-    """Load pronunciation replacements from config/pronunciation.yaml."""
-    path = os.path.join(base_dir, "config", "pronunciation.yaml")
-    try:
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        return data.get("replacements", {})
-    except FileNotFoundError:
-        return {}
-
-
-def _apply_pronunciation(text: str, replacements: dict[str, str]) -> str:
-    """Replace local place names with pronunciation-friendly versions.
-
-    Uses word boundary markers to avoid replacing inside larger words.
-    """
-    for original, pronunciation in replacements.items():
-        pattern = re.compile(r"\b" + re.escape(original) + r"\b", re.IGNORECASE)
-        text = pattern.sub(pronunciation, text)
-    return text
 
 
 def generate_editor_script(
@@ -164,11 +141,6 @@ def generate_speech_script(
     speech_script = result.get("speech_script", "")
 
     # Apply pronunciation substitutions
-    pronunciations = _load_pronunciation(base_dir)
-    if pronunciations:
-        speech_script = _apply_pronunciation(speech_script, pronunciations)
-        logger.info(f"Applied {len(pronunciations)} pronunciation substitutions")
-
     speech_path = _save_script(speech_script, date_str, "speech", base_dir)
     return speech_path
 
