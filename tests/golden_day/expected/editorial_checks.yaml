@@ -11,17 +11,17 @@ must_select:
     reason: "Lead story — directly impacts Allentown residents, voted last night"
   - headline_contains: "Bethlehem Steel"
     reason: "$12M grant for major local redevelopment — affects community"
-  - headline_contains: "LVHN"
-    reason: "$180M hospital expansion — major local investment"
+  - headline_contains: "breaks ground"
+    reason: "$180M hospital expansion — major local investment (matches both 'LVHN' and 'Lehigh Valley Health Network' headlines)"
 
-# Stories that SHOULD be selected if space allows
+# Stories that SHOULD be selected if space allows (ordered by editorial strength)
 should_select:
   - headline_contains: "opioid settlement"
-    reason: "First settlement payments — affects multiple LV cities"
+    reason: "First settlement payments — affects Allentown, Bethlehem, Easton; higher impact than routine traffic"
   - headline_contains: "Emmaus bakery"
     reason: "Community loss — 35-year local business closing"
   - headline_contains: "MacArthur Road"
-    reason: "Traffic impact — road closure affects commuters"
+    reason: "Traffic impact — road closure affects commuters (lower priority than opioid settlement)"
 
 # Stories that MUST be cut
 must_cut:

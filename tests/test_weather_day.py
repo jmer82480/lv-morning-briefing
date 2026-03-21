@@ -16,6 +16,7 @@ import json
 import os
 import sys
 
+import pytest
 import yaml
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -201,6 +202,99 @@ def test_weather_day_place_tagging():
     print(f"  ✓ Cooling centers tagged: {', '.join(places)}")
 
 
+def test_weather_day_severe_alerts_present():
+    """Verify the fixture has the right alert structure to drive full_segment.
+
+    This is the deterministic prerequisite: if the normalized weather data
+    doesn't have severe alerts, no model will ever produce full_segment.
+    """
+    raw = load_weather_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    weather_items = [i for i in normalized if i.get("section") == "weather"]
+    checks = load_editorial_checks()
+
+    alerts = [w for w in weather_items if w.get("type") == "alert"]
+    severities = [a.get("severity", "").lower() for a in alerts]
+
+    # Must have at least one severe-level alert
+    assert any(s in ("severe", "extreme") for s in severities), (
+        f"Fixture needs at least one severe/extreme alert to test full_segment path. "
+        f"Got severities: {severities}"
+    )
+
+    # Must have multiple alerts (the fixture has 3)
+    assert len(alerts) >= 2, (
+        f"Expected ≥2 weather alerts for full_segment test, got {len(alerts)}"
+    )
+
+    # Verify expected editorial outcome
+    assert checks["weather"]["expected_level"] == "full_segment", (
+        "Weather day fixture must expect full_segment"
+    )
+
+    alert_events = [a.get("event", "") for a in alerts]
+    print(f"  ✓ {len(alerts)} severe alerts present: {', '.join(alert_events)}")
+    print(f"  ✓ Expected editorial outcome: full_segment")
+
+
+def test_weather_day_editorial_selection():
+    """Full editorial selection test for the weather day — requires ANTHROPIC_API_KEY.
+
+    Validates that severe weather drives a full_segment weather decision
+    and that weather-adjacent stories (cooling centers) are selected.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        pytest.skip("ANTHROPIC_API_KEY not set")
+
+    from pipeline.select_stories import select_stories
+
+    raw = load_weather_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    checks = load_editorial_checks()
+
+    settings = {"ai": {"model": "claude-sonnet-4-20250514", "max_tokens": 4096},
+                "clustering": {"title_similarity_threshold": 75, "time_window_hours": 6}}
+
+    with open(os.path.join(PROJECT_ROOT, "config", "prompt_templates.yaml")) as f:
+        prompt_templates = yaml.safe_load(f)
+
+    overrides = {"force_include": [], "force_exclude": [], "pin_rank": []}
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        decisions = select_stories(
+            normalized, "2026-06-15", tmpdir, settings, prompt_templates, overrides
+        )
+
+    # Weather decision must be full_segment
+    weather = decisions.get("weather_decision", {})
+    expected_level = checks["weather"]["expected_level"]
+    assert weather.get("level") == expected_level, (
+        f"Expected weather level '{expected_level}', got '{weather.get('level')}'. "
+        f"With 3 severe alerts, weather must be full_segment."
+    )
+    print(f"  ✓ Weather: {weather.get('level')} (correct for severe alerts)")
+
+    # Cooling centers must be selected (weather-adjacent, public safety)
+    selected = decisions.get("selected_stories", [])
+    selected_headlines = [s.get("headline", "") for s in selected]
+    for rule in checks["must_select"]:
+        pattern = rule["headline_contains"]
+        found = any(_headline_matches(h, pattern) for h in selected_headlines)
+        assert found, f"Must-select story missing: '{pattern}' — {rule['reason']}"
+        print(f"  ✓ Must-select present: {pattern}")
+
+    # Story count within expected range
+    min_count = checks["expected_story_count"]["min"]
+    max_count = checks["expected_story_count"]["max"]
+    assert min_count <= len(selected) <= max_count, (
+        f"Expected {min_count}-{max_count} stories, got {len(selected)}"
+    )
+    print(f"  ✓ Story count: {len(selected)}")
+    print(f"\n  WEATHER DAY EDITORIAL SELECTION PASSED")
+
+
 # ---------------------------------------------------------------------------
 # Standalone runner
 # ---------------------------------------------------------------------------
@@ -214,6 +308,8 @@ if __name__ == "__main__":
         ("Unique stories separate", test_weather_day_unique_stories_separate),
         ("Item counts", test_weather_day_item_counts),
         ("Place tagging", test_weather_day_place_tagging),
+        ("Severe alerts present", test_weather_day_severe_alerts_present),
+        ("Editorial selection (API)", test_weather_day_editorial_selection),
     ]
 
     passed = 0

@@ -6,6 +6,7 @@ Shows editorial context (selected stories, cuts, overrides) before opening.
 
 import logging
 import os
+import shlex
 import subprocess
 import sys
 
@@ -102,9 +103,10 @@ def _open_in_editor(filepath: str):
     editor = os.environ.get("EDITOR", "")
 
     if editor:
-        # $EDITOR is set — use it (vim, nano, code --wait, etc. all block natively)
+        # $EDITOR may be multi-token (e.g., "code --wait", "subl -w")
         try:
-            subprocess.run([editor, filepath], check=True)
+            cmd = shlex.split(editor) + [filepath]
+            subprocess.run(cmd, check=True)
             return
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             logger.warning(f"Could not open $EDITOR '{editor}': {e}")

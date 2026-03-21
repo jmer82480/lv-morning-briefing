@@ -9,7 +9,6 @@ tts:
 
 briefing:
   target_words: 750
-  max_words: 1000
   freshness_hours: 24
 
 clustering:

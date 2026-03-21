@@ -17,6 +17,7 @@ import json
 import os
 import sys
 
+import pytest
 import yaml
 
 # Add project root to path
@@ -37,7 +38,7 @@ EXPECTED_DIR = os.path.join(GOLDEN_DIR, "expected")
 def load_golden_raw() -> list[dict]:
     """Load all raw items from the golden day fixture."""
     all_items = []
-    for filename in os.listdir(RAW_DIR):
+    for filename in sorted(os.listdir(RAW_DIR)):
         if not filename.endswith(".json"):
             continue
         with open(os.path.join(RAW_DIR, filename)) as f:
@@ -306,6 +307,151 @@ def test_enforce_pin_rank():
     print(f"  ✓ Pinned story moved to rank 1 (Claude had it at rank 5)")
 
 
+def test_enforce_pin_rank_mid_position():
+    """Verify pin_rank=3 is honored (not just rank 1)."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+    clusters = pre_cluster(news_items)
+
+    steel_cluster = _find_cluster_for_headline(clusters, "Bethlehem Steel")
+    assert steel_cluster is not None
+    steel_cluster["pinned_rank"] = 3
+
+    fake_decisions = {
+        "selected_stories": [
+            {"rank": 1, "cluster_id": 900, "headline": "Lead story"},
+            {"rank": 2, "cluster_id": 901, "headline": "Second story"},
+            {"rank": 3, "cluster_id": 902, "headline": "Third story"},
+            {"rank": 4, "cluster_id": 903, "headline": "Fourth story"},
+            {
+                "rank": 5,
+                "cluster_id": steel_cluster["cluster_id"],
+                "headline": steel_cluster["representative"]["headline"],
+            },
+        ],
+        "weather_decision": {"level": "one_liner"},
+        "cut_stories": [],
+        "near_misses": [],
+    }
+
+    result = enforce_overrides(fake_decisions, clusters)
+
+    steel_story = [
+        s for s in result["selected_stories"]
+        if s["cluster_id"] == steel_cluster["cluster_id"]
+    ]
+    assert len(steel_story) == 1
+    assert steel_story[0]["rank"] == 3, (
+        f"Pinned story should be rank 3, got rank {steel_story[0]['rank']}"
+    )
+
+    ranks = [s["rank"] for s in result["selected_stories"]]
+    assert ranks == list(range(1, len(ranks) + 1)), (
+        f"Ranks should be sequential, got {ranks}"
+    )
+    print(f"  ✓ Pinned story at rank 3 (Claude had it at rank 5)")
+
+
+def test_enforce_multiple_pins():
+    """Verify multiple pinned stories are all honored simultaneously."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+    clusters = pre_cluster(news_items)
+
+    tax_cluster = _find_cluster_for_headline(clusters, "tax increase")
+    steel_cluster = _find_cluster_for_headline(clusters, "Bethlehem Steel")
+    assert tax_cluster is not None
+    assert steel_cluster is not None
+
+    tax_cluster["pinned_rank"] = 1
+    steel_cluster["pinned_rank"] = 3
+
+    fake_decisions = {
+        "selected_stories": [
+            {"rank": 1, "cluster_id": 900, "headline": "Lead story"},
+            {"rank": 2, "cluster_id": 901, "headline": "Second story"},
+            {
+                "rank": 3,
+                "cluster_id": steel_cluster["cluster_id"],
+                "headline": steel_cluster["representative"]["headline"],
+            },
+            {
+                "rank": 4,
+                "cluster_id": tax_cluster["cluster_id"],
+                "headline": tax_cluster["representative"]["headline"],
+            },
+            {"rank": 5, "cluster_id": 903, "headline": "Fifth story"},
+        ],
+        "weather_decision": {"level": "one_liner"},
+        "cut_stories": [],
+        "near_misses": [],
+    }
+
+    result = enforce_overrides(fake_decisions, clusters)
+
+    tax_story = [s for s in result["selected_stories"]
+                 if s["cluster_id"] == tax_cluster["cluster_id"]]
+    steel_story = [s for s in result["selected_stories"]
+                   if s["cluster_id"] == steel_cluster["cluster_id"]]
+
+    assert tax_story[0]["rank"] == 1, (
+        f"Tax story should be rank 1, got {tax_story[0]['rank']}"
+    )
+    assert steel_story[0]["rank"] == 3, (
+        f"Steel story should be rank 3, got {steel_story[0]['rank']}"
+    )
+
+    ranks = [s["rank"] for s in result["selected_stories"]]
+    assert ranks == list(range(1, len(ranks) + 1)), (
+        f"Ranks should be sequential, got {ranks}"
+    )
+    print(f"  ✓ Two pinned stories at ranks 1 and 3 simultaneously")
+
+
+def test_enforce_force_include_with_pin():
+    """Verify force_include + pin_rank together: injected story gets pinned rank."""
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+    clusters = pre_cluster(news_items)
+
+    steel_cluster = _find_cluster_for_headline(clusters, "Bethlehem Steel")
+    assert steel_cluster is not None
+    steel_cluster["force_included"] = True
+    steel_cluster["pinned_rank"] = 2
+
+    # Claude omits the steel story entirely
+    fake_decisions = {
+        "selected_stories": [
+            {"rank": 1, "cluster_id": 900, "headline": "Lead story"},
+            {"rank": 2, "cluster_id": 901, "headline": "Second story"},
+            {"rank": 3, "cluster_id": 902, "headline": "Third story"},
+        ],
+        "weather_decision": {"level": "one_liner"},
+        "cut_stories": [],
+        "near_misses": [],
+    }
+
+    result = enforce_overrides(fake_decisions, clusters)
+    selected = result["selected_stories"]
+
+    # Steel story must be present
+    steel_story = [s for s in selected if s["cluster_id"] == steel_cluster["cluster_id"]]
+    assert len(steel_story) == 1, "Force-included story should be present"
+    assert steel_story[0]["rank"] == 2, (
+        f"Force-included + pinned story should be rank 2, got {steel_story[0]['rank']}"
+    )
+
+    ranks = [s["rank"] for s in selected]
+    assert ranks == list(range(1, len(ranks) + 1)), (
+        f"Ranks should be sequential, got {ranks}"
+    )
+    assert len(selected) == 4, f"Should have 4 total stories (3 + 1 injected), got {len(selected)}"
+    print(f"  ✓ Force-included story injected at pinned rank 2")
+
+
 def test_validation_rejects_empty_selection():
     """Verify validation catches zero selected stories."""
     bad_decisions = {
@@ -357,6 +503,71 @@ def test_validation_rejects_empty_script():
         os.unlink(tmp_path)
 
 
+def test_clustering_determinism():
+    """Verify the same fixture produces identical clusters regardless of file load order.
+
+    This catches non-determinism from dict/set iteration order or unsorted listdir.
+    """
+    raw = load_golden_raw()
+    normalized = normalize_items(raw, freshness_hours=8760)
+    news_items = [i for i in normalized if i.get("section") != "weather"]
+
+    clusters_a = pre_cluster(news_items, similarity_threshold=75, time_window_hours=6)
+
+    # Reverse the input order — should produce the same clusters
+    reversed_items = list(reversed(news_items))
+    clusters_b = pre_cluster(reversed_items, similarity_threshold=75, time_window_hours=6)
+
+    assert len(clusters_a) == len(clusters_b), (
+        f"Cluster count changed with input order: {len(clusters_a)} vs {len(clusters_b)}"
+    )
+
+    # Compare cluster contents by headline sets
+    def cluster_signature(clusters):
+        sigs = set()
+        for c in clusters:
+            headlines = frozenset(m.get("headline", "") for m in c["members"])
+            sigs.add(headlines)
+        return sigs
+
+    sigs_a = cluster_signature(clusters_a)
+    sigs_b = cluster_signature(clusters_b)
+
+    assert sigs_a == sigs_b, (
+        f"Cluster contents changed with input order.\n"
+        f"Only in A: {sigs_a - sigs_b}\n"
+        f"Only in B: {sigs_b - sigs_a}"
+    )
+    print(f"  ✓ {len(clusters_a)} clusters stable across input orderings")
+
+
+def test_logger_date_switch():
+    """Verify logger correctly switches file handler when date changes."""
+    from pipeline.logger import setup_logger, _current_log_file
+    import tempfile
+
+    # We can't easily test file paths without mocking, but we can verify
+    # that calling setup_logger twice with different dates doesn't duplicate handlers
+    logger_a = setup_logger("2026-01-01")
+    handler_count_a = len(logger_a.handlers)
+
+    logger_b = setup_logger("2026-01-02")
+    handler_count_b = len(logger_b.handlers)
+
+    assert handler_count_a == handler_count_b, (
+        f"Handler count changed from {handler_count_a} to {handler_count_b} on date switch. "
+        f"Logger is accumulating duplicate handlers."
+    )
+
+    # Same logger instance
+    assert logger_a is logger_b, "setup_logger should return the same logger instance"
+
+    # propagate should be False
+    assert not logger_b.propagate, "Logger propagate should be False"
+
+    print(f"  ✓ Logger handles date switch cleanly ({handler_count_b} handlers)")
+
+
 def test_golden_day_item_counts():
     """Verify item counts are in expected ranges."""
     raw = load_golden_raw()
@@ -382,8 +593,7 @@ def test_editorial_selection():
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        print("  SKIPPED (no ANTHROPIC_API_KEY)")
-        return
+        pytest.skip("ANTHROPIC_API_KEY not set")
 
     from pipeline.select_stories import select_stories
 
@@ -456,9 +666,14 @@ if __name__ == "__main__":
         ("Overrides force-exclude", test_overrides_force_exclude),
         ("Enforce force-include post-Claude", test_enforce_force_include),
         ("Enforce pin-rank post-Claude", test_enforce_pin_rank),
+        ("Enforce pin-rank=3", test_enforce_pin_rank_mid_position),
+        ("Enforce multiple pins", test_enforce_multiple_pins),
+        ("Enforce force-include + pin", test_enforce_force_include_with_pin),
         ("Validation: empty selection", test_validation_rejects_empty_selection),
         ("Validation: missing headline", test_validation_rejects_missing_headline),
         ("Validation: empty script", test_validation_rejects_empty_script),
+        ("Clustering determinism", test_clustering_determinism),
+        ("Logger date switch", test_logger_date_switch),
         ("Golden day item counts", test_golden_day_item_counts),
         ("Editorial selection (API)", test_editorial_selection),
     ]

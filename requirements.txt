@@ -6,3 +6,4 @@ elevenlabs
 python-dateutil
 python-dotenv
 rapidfuzz
+pytest

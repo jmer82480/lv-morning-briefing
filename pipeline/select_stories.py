@@ -108,6 +108,12 @@ def pre_cluster(
     Returns a list of cluster dicts, each with:
       cluster_id, representative, members, similarity_score, local_places, source_count
     """
+    # Sort inputs for deterministic output regardless of file iteration order
+    news_items = sorted(
+        news_items,
+        key=lambda x: (x.get("published_at", ""), x.get("source_name", ""), x.get("headline", "")),
+    )
+
     clusters: list[dict] = []
     assigned = set()
 
@@ -374,7 +380,7 @@ def editorial_select(
     decisions["date"] = date_str
     decisions["model"] = model
     decisions["cluster_count"] = len(clusters)
-    decisions["raw_item_count"] = sum(len(c["members"]) for c in clusters)
+    decisions["candidate_news_item_count"] = sum(len(c["members"]) for c in clusters)
 
     logger.info(
         f"Editorial selection complete: {len(decisions.get('selected_stories', []))} selected, "
@@ -391,28 +397,30 @@ def editorial_select(
 def enforce_overrides(decisions: dict, clusters: list[dict]) -> dict:
     """Enforce manual overrides after Claude returns its selection.
 
-    Guarantees that:
-      - force_included clusters are present in selected_stories
-      - pinned_rank clusters have the correct rank
-    Claude's output is treated as a suggestion; overrides are deterministic.
-    """
-    selected = decisions.get("selected_stories", [])
-    selected_cluster_ids = {s.get("cluster_id") for s in selected}
-    patched = False
+    Uses deterministic slot-based enforcement:
+      1. Force-included clusters are guaranteed present.
+      2. Pinned ranks are reserved as slots.
+      3. Non-pinned stories fill remaining slots in Claude's original order.
+      4. Final ranks are always sequential 1..N.
 
+    Claude's output is treated as a suggestion; overrides are authoritative.
+    """
+    selected = list(decisions.get("selected_stories", []))
+    selected_by_cid = {s.get("cluster_id"): s for s in selected}
+
+    # Build the override index: cluster_id → {force_included, pinned_rank}
+    pinned_map: dict[int, int] = {}  # cluster_id → target_rank
     for cluster in clusters:
         cid = cluster["cluster_id"]
         rep = cluster["representative"]
 
-        # Enforce force-include: add missing stories
-        if cluster.get("force_included") and cid not in selected_cluster_ids:
+        # Enforce force-include: inject missing stories
+        if cluster.get("force_included") and cid not in selected_by_cid:
             logger.warning(
                 f"Override enforcement: force-including cluster {cid} "
                 f"({rep.get('headline', '')!r}) — Claude omitted it"
             )
-            pinned = cluster.get("pinned_rank")
             entry = {
-                "rank": pinned or len(selected) + 1,
                 "cluster_id": cid,
                 "headline": rep.get("headline", ""),
                 "summary": rep.get("summary", ""),
@@ -428,34 +436,51 @@ def enforce_overrides(decisions: dict, clusters: list[dict]) -> dict:
                 "why_it_matters": "Operator flagged this story as must-include",
             }
             selected.append(entry)
-            patched = True
+            selected_by_cid[cid] = entry
 
-        # Enforce pinned rank
-        if cluster.get("pinned_rank") and cid in selected_cluster_ids:
-            target_rank = cluster["pinned_rank"]
-            for story in selected:
-                if story.get("cluster_id") == cid and story.get("rank") != target_rank:
-                    logger.warning(
-                        f"Override enforcement: pinning cluster {cid} "
-                        f"({rep.get('headline', '')!r}) to rank {target_rank} "
-                        f"(Claude assigned rank {story.get('rank')})"
-                    )
-                    story["rank"] = target_rank
-                    patched = True
+        # Collect pinned ranks
+        if cluster.get("pinned_rank") and cid in selected_by_cid:
+            target = cluster["pinned_rank"]
+            old_rank = selected_by_cid[cid].get("rank")
+            if old_rank != target:
+                logger.warning(
+                    f"Override enforcement: pinning cluster {cid} "
+                    f"({rep.get('headline', '')!r}) to rank {target} "
+                    f"(Claude assigned rank {old_rank})"
+                )
+            pinned_map[cid] = target
 
-    if patched:
-        # Collect pinned cluster IDs so they win rank ties
-        pinned_cids = {
-            c["cluster_id"] for c in clusters if c.get("pinned_rank")
-        }
-        # Sort by rank, with pinned stories breaking ties first (0 < 1)
-        selected.sort(
-            key=lambda s: (s.get("rank", 999), 0 if s.get("cluster_id") in pinned_cids else 1)
-        )
-        for i, story in enumerate(selected):
-            story["rank"] = i + 1
-        decisions["selected_stories"] = selected
+    # Slot-based reassignment: reserve pinned slots, fill rest in Claude order
+    total = len(selected)
+    # Sort non-pinned stories by Claude's original rank
+    pinned_stories = [s for s in selected if s.get("cluster_id") in pinned_map]
+    unpinned_stories = [s for s in selected if s.get("cluster_id") not in pinned_map]
+    unpinned_stories.sort(key=lambda s: s.get("rank", 999))
 
+    # Build final list: slots 1..total
+    result = [None] * total
+
+    # Place pinned stories in their reserved slots (clamped to valid range)
+    for story in pinned_stories:
+        slot = pinned_map[story["cluster_id"]]
+        slot = max(1, min(slot, total))  # clamp to [1, total]
+        idx = slot - 1
+        # If slot already taken by another pin, shift to next available
+        while result[idx] is not None:
+            idx = (idx + 1) % total
+        result[idx] = story
+
+    # Fill remaining slots with unpinned stories in Claude's order
+    unpinned_iter = iter(unpinned_stories)
+    for i in range(total):
+        if result[i] is None:
+            result[i] = next(unpinned_iter)
+
+    # Assign sequential ranks
+    for i, story in enumerate(result):
+        story["rank"] = i + 1
+
+    decisions["selected_stories"] = result
     return decisions
 
 
@@ -553,6 +578,10 @@ def select_stories(
     decisions = editorial_select(
         clusters, weather_items, date_str, prompt_templates, settings,
     )
+
+    # Record both counts clearly
+    decisions["raw_news_item_count"] = len(news_items)
+    # candidate_news_item_count already set by editorial_select
 
     # Phase C: Enforce overrides post-Claude
     decisions = enforce_overrides(decisions, clusters)

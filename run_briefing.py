@@ -149,7 +149,8 @@ def print_scorecard(decisions: dict, date_str: str, base_dir: str) -> str:
         "=" * 60,
         f"EDITORIAL SCORECARD — {date_str}",
         "=" * 60,
-        f"  Raw items:           {decisions.get('raw_item_count', '?')}",
+        f"  Raw news items:      {decisions.get('raw_news_item_count', '?')}",
+        f"  After overrides:     {decisions.get('candidate_news_item_count', '?')}",
         f"  Clusters:            {decisions.get('cluster_count', '?')}",
         f"  Selected:            {len(selected)}",
         f"  Cut:                 {len(cut)}",
@@ -496,7 +497,7 @@ def load_existing_raw(date_str: str, raw_dir: str | None = None) -> list[dict]:
         sys.exit(1)
 
     all_items = []
-    for filename in os.listdir(raw_dir):
+    for filename in sorted(os.listdir(raw_dir)):
         if not filename.endswith(".json"):
             continue
         filepath = os.path.join(raw_dir, filename)
@@ -581,7 +582,8 @@ def save_run_summary(
 
     if editorial_decisions:
         summary["editorial"] = {
-            "raw_items": editorial_decisions.get("raw_item_count"),
+            "raw_news_items": editorial_decisions.get("raw_news_item_count"),
+            "candidate_news_items": editorial_decisions.get("candidate_news_item_count"),
             "clusters": editorial_decisions.get("cluster_count"),
             "selected": len(editorial_decisions.get("selected_stories", [])),
             "cut": len(editorial_decisions.get("cut_stories", [])),
