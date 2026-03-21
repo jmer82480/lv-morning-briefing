@@ -25,6 +25,7 @@ sources:
 
   - name: "NWS Forecast"
     type: weather_api
+    mode: forecast
     url: "https://api.weather.gov/gridpoints/PHI/67,75/forecast"
     section: weather
     enabled: true
@@ -33,6 +34,7 @@ sources:
 
   - name: "NWS Alerts"
     type: weather_api
+    mode: alerts
     url: "https://api.weather.gov/alerts/active?zone=PAC077,PAC095"
     section: weather
     enabled: true

@@ -154,7 +154,18 @@ def call_claude_json(
                     f"{usage_entry['output_tokens']} out tokens"
                 )
 
-            response_text = response.content[0].text
+            # Find the first text content block
+            response_text = None
+            for block in response.content:
+                if getattr(block, "type", None) == "text" and getattr(block, "text", None):
+                    response_text = block.text
+                    break
+            if not response_text:
+                raise ValueError(
+                    f"{label}: no text content block in response "
+                    f"(got {[getattr(b, 'type', '?') for b in response.content]})"
+                )
+
             result = extract_json(response_text)
             validate_keys(result, required_keys, label)
             return result

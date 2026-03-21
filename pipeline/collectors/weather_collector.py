@@ -21,7 +21,13 @@ class WeatherCollector(BaseCollector):
             logger.warning(f"  Weather API error for {self.name}: {e}")
             return []
 
-        if "alerts" in self.url:
+        if not self.mode:
+            logger.warning(
+                f"  Weather source '{self.name}' has no mode set. "
+                f"Add mode: forecast or mode: alerts to sources.yaml. Defaulting to forecast."
+            )
+
+        if self.mode == "alerts":
             return self._parse_alerts(data)
         else:
             return self._parse_forecast(data)

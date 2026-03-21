@@ -42,7 +42,7 @@ python3 run_briefing.py --collect-only     # Only fetch sources
 python3 run_briefing.py --skip-collect     # Re-use existing raw data
 python3 run_briefing.py --select-only      # Re-run selection from normalized data
 python3 run_briefing.py --script-only      # Re-generate scripts from decisions
-python3 run_briefing.py --audio-only       # Re-run TTS from speech script
+python3 run_briefing.py --audio-only       # Re-run TTS only (does not reassemble episode)
 
 # Modifiers
 python3 run_briefing.py --skip-review      # Skip human review gate
@@ -85,6 +85,12 @@ config/pronunciation.yaml    # TTS pronunciation for local place names
 
 Overrides are enforced deterministically after Claude returns its selection.
 
+## Rerun behavior
+
+- `--audio-only` regenerates only the audio file. It does **not** reassemble the episode package. Use a full run or `--script-only` followed by a full run to update the episode.
+- `logs/{date}_summary.json` is overwritten on same-date reruns. The latest run's summary is the one that persists.
+- Stage artifacts (`raw/`, `normalized/`, `selected/`, `scripts/`) are overwritten per date, not appended.
+
 ## Tests
 
 ```bash
@@ -106,7 +112,7 @@ pip install -r requirements.txt
 
 Requires API keys in `.env`:
 - `ANTHROPIC_API_KEY` — Claude (story selection + script generation)
-- `ELEVEN_API_KEY` — ElevenLabs TTS (audio generation)
+- `ELEVENLABS_API_KEY` — ElevenLabs TTS (audio generation)
 
 ## Core editorial rules
 

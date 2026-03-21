@@ -1,13 +1,21 @@
 import logging
 import re
+import time
 from datetime import datetime, timezone
 
 import feedparser
+import requests
 from dateutil import parser as dateparser
 
 from .base import BaseCollector
 
 logger = logging.getLogger("briefing")
+
+RSS_HEADERS = {
+    "User-Agent": "LVMorningBriefing/1.0 (lvmorningbriefing@example.com)",
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+}
+RSS_TIMEOUT = 15
 
 
 class RSSCollector(BaseCollector):
@@ -16,7 +24,11 @@ class RSSCollector(BaseCollector):
     def collect(self) -> list[dict]:
         logger.info(f"  Fetching RSS: {self.name} ({self.url})")
 
-        feed = feedparser.parse(self.url)
+        body = self._fetch_with_retry(self.url)
+        if body is None:
+            return []
+
+        feed = feedparser.parse(body)
 
         if feed.bozo and not feed.entries:
             logger.warning(f"  RSS parse error for {self.name}: {feed.bozo_exception}")
@@ -65,6 +77,22 @@ class RSSCollector(BaseCollector):
                 pass
 
         return None
+
+    def _fetch_with_retry(self, url: str, retries: int = 2) -> str | None:
+        """Fetch RSS feed body via requests with timeout and retry."""
+        headers = {**RSS_HEADERS, **self.headers}
+        for attempt in range(retries):
+            try:
+                resp = requests.get(url, headers=headers, timeout=RSS_TIMEOUT)
+                resp.raise_for_status()
+                return resp.text
+            except requests.RequestException as e:
+                if attempt < retries - 1:
+                    logger.warning(f"  RSS fetch failed for {self.name} (attempt {attempt + 1}): {e}. Retrying...")
+                    time.sleep(3)
+                else:
+                    logger.error(f"  RSS fetch failed for {self.name} after {retries} attempts: {e}")
+                    return None
 
     def _strip_html(self, text: str) -> str:
         """Remove HTML tags from text."""

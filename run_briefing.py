@@ -669,7 +669,8 @@ def main():
     overrides = load_config("overrides.yaml")
     sources = sources_config.get("sources", [])
 
-    # --audio-only: just re-run TTS from existing speech script
+    # --audio-only: just re-run TTS from existing speech script.
+    # Intentionally does NOT reassemble the episode — use a full run for that.
     if args.audio_only:
         speech_path = os.path.join(BASE_DIR, "scripts", f"{date_str}_speech.md")
         if not os.path.exists(speech_path):

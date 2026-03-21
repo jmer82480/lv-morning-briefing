@@ -53,14 +53,34 @@ def generate_item_id(source_url: str) -> str:
     return hashlib.sha256(canonical_url(source_url).encode()).hexdigest()[:16]
 
 
+def _build_place_patterns() -> list[tuple[re.Pattern, str]]:
+    """Build word-boundary-safe regex patterns for each place name.
+
+    Multi-word places (e.g. "Lehigh Valley") use their natural whitespace
+    as implicit boundaries. Single-word places use \\b to avoid matching
+    inside larger words (e.g. "bath" inside "bathroom").
+    """
+    patterns = []
+    for place in sorted(LV_PLACES, key=len, reverse=True):  # longest first
+        if " " in place:
+            # Multi-word: natural word boundaries from the spaces
+            pat = re.compile(re.escape(place), re.IGNORECASE)
+        else:
+            # Single-word: explicit word boundaries
+            pat = re.compile(r"\b" + re.escape(place) + r"\b", re.IGNORECASE)
+        patterns.append((pat, place.title()))
+    return patterns
+
+
+_PLACE_PATTERNS = _build_place_patterns()
+
+
 def tag_local_places(text: str) -> list[str]:
-    """Extract Lehigh Valley place names from text."""
-    text_lower = text.lower()
+    """Extract Lehigh Valley place names from text using word-boundary matching."""
     found = []
-    for place in LV_PLACES:
-        if place in text_lower:
-            # Return the properly cased version
-            found.append(place.title())
+    for pattern, title_cased in _PLACE_PATTERNS:
+        if pattern.search(text):
+            found.append(title_cased)
     return sorted(set(found))
 
 

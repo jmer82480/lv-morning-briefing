@@ -14,6 +14,7 @@ class BaseCollector(ABC):
         self.url = source_config["url"]
         self.section = source_config["section"]
         self.headers = source_config.get("headers", {})
+        self.mode = source_config.get("mode", "")
 
     @abstractmethod
     def collect(self) -> list[dict]:
