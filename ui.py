@@ -53,7 +53,7 @@ ARTIFACTS = [
     ("Editor script", lambda d: os.path.join("scripts", f"{d}_editor.md"), False),
     ("Speech script", lambda d: os.path.join("scripts", f"{d}_speech.md"), False),
     ("Final audio", lambda d: os.path.join("audio", f"{d}_briefing.mp3"), False),
-    ("Summary JSON", lambda d: os.path.join("logs", f"{d}_summary.json"), False),
+    ("Run summary", lambda d: os.path.join("logs", f"{d}_summary.json"), False),
 ]
 
 
@@ -252,6 +252,23 @@ with h_right:
     st.markdown(f"**Output folder:** `{_output_folder(ds)}`")
 
 
+# ── Getting Started (compact help) ───────────────────────────────────────────
+
+with st.expander("Getting Started"):
+    st.markdown(
+        "**Normal workflow:**\n"
+        "1. Pick a date above.\n"
+        "2. Click **Build Review Packet Only** to collect and rank stories "
+        "without generating audio.\n"
+        "3. Open the artifacts below to review the editor script and "
+        "selected stories.\n"
+        "4. Edit the editor script if anything needs changing.\n"
+        "5. Click **Audio Only** to generate audio from the reviewed script.\n"
+        "6. Use **Run Full Briefing** when you want the complete end-to-end "
+        "run in one step."
+    )
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # 2) ACTION BUTTONS
 # ═════════════════════════════════════════════════════════════════════════════
@@ -306,8 +323,7 @@ with oright:
     )
 
 st.caption(
-    "Keep V1 simple. Advanced source and prompt controls should stay out of "
-    "this screen."
+    "Source and prompt settings are managed in the config files, not here."
 )
 
 
@@ -354,9 +370,9 @@ if requested:
     if not error_msg and _any_outputs_exist(ds) and requested != "audio_only":
         if not opt_overwrite:
             error_msg = (
-                "Outputs already exist for this date and overwrite was not "
-                "enabled. Check \u2018Overwrite existing outputs for this "
-                "date\u2019 to proceed."
+                "Outputs already exist for this date. To run again, check "
+                "the \"Overwrite existing outputs for this date\" box in "
+                "Options above, then try again."
             )
         elif opt_confirm:
             needs_confirm = True
@@ -477,7 +493,7 @@ if st.button("Refresh Artifacts"):
 # 6) TODAY'S SNAPSHOT
 # ═════════════════════════════════════════════════════════════════════════════
 
-st.header("Today\u2019s Snapshot")
+st.header("Snapshot for Selected Date")
 
 _decisions = _load_json(f"selected/{ds}/editorial_decisions.json")
 _raw_dir = _abs(f"raw/{ds}")

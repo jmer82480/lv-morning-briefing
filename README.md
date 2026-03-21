@@ -91,6 +91,29 @@ Overrides are enforced deterministically after Claude returns its selection.
 - `logs/{date}_summary.json` is overwritten on same-date reruns. The latest run's summary is the one that persists.
 - Stage artifacts (`raw/`, `normalized/`, `selected/`, `scripts/`) are overwritten per date, not appended.
 
+## Local Operator UI
+
+A browser-based panel for running the pipeline without using the command line.
+No Streamlit account is required — everything runs locally.
+
+```bash
+# Set up a virtual environment (one time)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Launch the operator panel
+streamlit run ui.py
+```
+
+The UI opens in your default browser and provides three main actions:
+
+- **Run Full Briefing** — Collect sources, rank stories, generate scripts, produce audio, and assemble all outputs end-to-end.
+- **Build Review Packet Only** — Run everything except audio so you can inspect stories and scripts before committing to TTS.
+- **Audio Only** — Generate audio from an existing speech script (useful after reviewing and editing).
+
+Pick a date, click a button, and watch the progress. Output files can be opened directly from the artifacts table.
+
 ## Tests
 
 ```bash
