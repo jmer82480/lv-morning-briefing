@@ -406,9 +406,10 @@ if requested:
             )
 
     # Overwrite protection (skip for audio-only since it only touches audio/)
+    blocked_msg: str | None = None
     if not error_msg and _any_outputs_exist(ds) and requested != "audio_only":
         if not opt_overwrite:
-            error_msg = (
+            blocked_msg = (
                 "Outputs already exist for this date. To run again, check "
                 "the \"Overwrite existing outputs for this date\" box in "
                 "Options above, then try again."
@@ -419,6 +420,10 @@ if requested:
     if error_msg:
         st.session_state.run_status = "Failed"
         st.session_state.run_error = error_msg
+
+    elif blocked_msg:
+        st.session_state.run_status = "Blocked"
+        st.session_state.run_error = blocked_msg
 
     elif needs_confirm:
         st.warning(
@@ -488,6 +493,8 @@ sc5.metric("Selected date", ds)
 
 if _s.run_status == "Failed" and _s.run_error:
     st.error(_s.run_error)
+elif _s.run_status == "Blocked" and _s.run_error:
+    st.warning(_s.run_error)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
