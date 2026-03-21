@@ -843,13 +843,17 @@ def main():
             )
             sys.exit(1)
 
-    # Stage 7: Assemble episode
-    episode_dir = run_assemble(
-        date_str, editor_path, speech_path, audio_path, editorial_decisions
-    )
+    # Stage 7: Assemble episode (skip when audio was skipped — the operator
+    # is reviewing, not publishing; a full run later will assemble)
+    episode_dir = None
+    if not args.skip_audio:
+        episode_dir = run_assemble(
+            date_str, editor_path, speech_path, audio_path, editorial_decisions
+        )
 
     # Run summary
-    save_run_summary(date_str, "full", start_time,
+    run_mode = "review-packet" if args.skip_audio else "full"
+    save_run_summary(date_str, run_mode, start_time,
                      {"episode": episode_dir, "editor_script": editor_path,
                       "speech_script": speech_path, "review_packet": packet_path,
                       "audio": audio_path},
@@ -858,14 +862,25 @@ def main():
     # Final output
     _print_duration(start_time)
     print("\n" + "=" * 60)
-    print("BRIEFING COMPLETE")
-    print("=" * 60)
-    print(f"Episode:        {episode_dir}")
-    print(f"Editor script:  {editor_path}")
-    print(f"Speech script:  {speech_path}")
-    print(f"Review packet:  {packet_path}")
-    if audio_path:
-        print(f"Audio:          {audio_path}")
+    if args.skip_audio:
+        print("REVIEW PACKET COMPLETE")
+        print("=" * 60)
+        print(f"Editor script:  {editor_path}")
+        print(f"Speech script:  {speech_path}")
+        print(f"Review packet:  {packet_path}")
+        print(f"\nReview the editor script and review packet.")
+        print(f"When ready, re-run with --audio-only to generate audio,")
+        print(f"or run the full pipeline again.")
+    else:
+        print("BRIEFING COMPLETE")
+        print("=" * 60)
+        if episode_dir:
+            print(f"Episode:        {episode_dir}")
+        print(f"Editor script:  {editor_path}")
+        print(f"Speech script:  {speech_path}")
+        print(f"Review packet:  {packet_path}")
+        if audio_path:
+            print(f"Audio:          {audio_path}")
     print("=" * 60)
 
 

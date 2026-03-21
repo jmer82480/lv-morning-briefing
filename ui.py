@@ -245,9 +245,9 @@ with h_right:
             _completed = _dt.strftime("%I:%M %p")
         except Exception:
             pass
-        st.markdown(f"**Last run:** {_last_mode} at {_completed}")
+        st.markdown(f"**Run status for selected date:** {_last_mode} at {_completed}")
     else:
-        st.markdown("**Last run:** None")
+        st.markdown("**Run status for selected date:** None")
 
     st.markdown(f"**Output folder:** `{_output_folder(ds)}`")
 
@@ -455,9 +455,7 @@ for _art_name, _path_fn, _is_dir in ARTIFACTS:
     c2.write(f":green[{_status_label}]" if _exists else f":orange[{_status_label}]")
     c3.caption(_rel)
 
-    if _art_name == "Final audio" and _exists:
-        c4.button("Play", key=f"art_{_art_name}")
-    elif _is_dir and _exists:
+    if _is_dir and _exists:
         if c4.button("Reveal", key=f"art_{_art_name}"):
             _open_path(_full)
     elif _exists:
