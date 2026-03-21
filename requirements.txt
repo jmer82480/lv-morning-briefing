@@ -9,4 +9,4 @@ python-dotenv>=1.0,<2
 rapidfuzz>=3.0,<4
 
 # Dev / test
-pytest>=8.0,<10
+pytest>=8.0,<9

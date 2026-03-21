@@ -155,7 +155,14 @@ def call_claude_json(
                 )
 
             # Safely extract the first text content block
-            blocks = getattr(response, "content", None) or []
+            raw_content = getattr(response, "content", None)
+            if raw_content is None:
+                blocks = []
+            else:
+                try:
+                    blocks = list(raw_content)
+                except TypeError:
+                    blocks = []
             response_text = None
             for block in blocks:
                 if getattr(block, "type", None) == "text" and getattr(block, "text", None):
@@ -172,7 +179,7 @@ def call_claude_json(
             validate_keys(result, required_keys, label)
             return result
 
-        except (json.JSONDecodeError, ValueError, anthropic.APIError, KeyError, IndexError) as e:
+        except (json.JSONDecodeError, ValueError, TypeError, anthropic.APIError, KeyError, IndexError) as e:
             if attempt == 0:
                 logger.warning(f"{label} failed (attempt 1): {e}. Retrying in 5s...")
                 time.sleep(5)
