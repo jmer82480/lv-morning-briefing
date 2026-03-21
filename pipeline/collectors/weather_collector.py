@@ -21,16 +21,16 @@ class WeatherCollector(BaseCollector):
             logger.warning(f"  Weather API error for {self.name}: {e}")
             return []
 
-        if not self.mode:
-            logger.warning(
-                f"  Weather source '{self.name}' has no mode set. "
-                f"Add mode: forecast or mode: alerts to sources.yaml. Defaulting to forecast."
-            )
-
-        if self.mode == "alerts":
+        if self.mode == "forecast":
+            return self._parse_forecast(data)
+        elif self.mode == "alerts":
             return self._parse_alerts(data)
         else:
-            return self._parse_forecast(data)
+            logger.error(
+                f"  Weather source '{self.name}' has invalid or missing mode: {self.mode!r}. "
+                f"Set mode: forecast or mode: alerts in sources.yaml. Skipping."
+            )
+            return []
 
     def _parse_forecast(self, data: dict) -> list[dict]:
         """Parse NWS forecast response into structured items."""

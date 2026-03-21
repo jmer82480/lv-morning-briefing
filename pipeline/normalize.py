@@ -56,18 +56,13 @@ def generate_item_id(source_url: str) -> str:
 def _build_place_patterns() -> list[tuple[re.Pattern, str]]:
     """Build word-boundary-safe regex patterns for each place name.
 
-    Multi-word places (e.g. "Lehigh Valley") use their natural whitespace
-    as implicit boundaries. Single-word places use \\b to avoid matching
-    inside larger words (e.g. "bath" inside "bathroom").
+    All places use \\b on both ends so they cannot match as substrings
+    of larger tokens. Sorted longest-first so "Upper Macungie" is
+    checked before "Macungie".
     """
     patterns = []
     for place in sorted(LV_PLACES, key=len, reverse=True):  # longest first
-        if " " in place:
-            # Multi-word: natural word boundaries from the spaces
-            pat = re.compile(re.escape(place), re.IGNORECASE)
-        else:
-            # Single-word: explicit word boundaries
-            pat = re.compile(r"\b" + re.escape(place) + r"\b", re.IGNORECASE)
+        pat = re.compile(r"\b" + re.escape(place) + r"\b", re.IGNORECASE)
         patterns.append((pat, place.title()))
     return patterns
 
