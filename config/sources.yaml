@@ -33,6 +33,8 @@ sources:
       User-Agent: "LVMorningBriefing/1.0 (lvmorningbriefing@example.com)"
     # Fallback chain: tried in order if the primary URL returns no forecast.
     # All are official NWS sources — different API paths for the same region.
+    # PAZ061 = NWS forecast zone serving Lehigh County (not Lehigh Township)
+    # PAZ062 = NWS forecast zone serving Northampton County (not Northampton Borough)
     fallback_urls:
       - "https://api.weather.gov/zones/forecast/PAZ061/forecast"
       - "https://api.weather.gov/zones/forecast/PAZ062/forecast"
