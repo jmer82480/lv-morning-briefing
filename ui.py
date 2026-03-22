@@ -390,6 +390,10 @@ if not requested and st.session_state.get("execute_mode"):
 if requested:
     # Capture mode and clear stale state immediately, before any checks.
     # This ensures the status row always shows the resolved mode.
+    # If this is a fresh button click (not a confirm resumption), clear any
+    # stale pending_confirm from a different action so it cannot block.
+    if not _from_confirm:
+        st.session_state.pending_confirm = None
     label = MODE_LABELS[requested]
     st.session_state.run_mode = label
     st.session_state.run_error = None
