@@ -311,6 +311,7 @@ def _build_weather_for_prompt(weather_items: list[dict]) -> str:
 
     weather_data = {
         "available": True,
+        "forecast_available": len(forecasts) > 0,
         "forecasts": [
             {
                 "period": f.get("period_name", ""),

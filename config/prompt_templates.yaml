@@ -21,6 +21,11 @@ story_selection:
     - If there are severe weather alerts, weather is a full segment.
     - If weather is notable (big temp swings, rain/snow impact on commute), give it a brief segment.
     - If weather is unremarkable, give it one sentence or skip entirely.
+    - forecast_summary MUST be forward-looking: today's expected conditions, highs/lows, and
+      any precipitation or wind. Use the forecast periods provided, not expired advisories.
+    - If forecast data is unavailable (forecast_available is false), say so briefly and move on.
+    - Expired or past-tense advisories may be mentioned as brief context but must NOT replace
+      the actual forecast in forecast_summary.
 
     You MUST respond with valid JSON matching the schema exactly. Do NOT add stories, facts,
     or details that are not in the provided candidates. You are selecting and ranking, not inventing.
@@ -59,7 +64,7 @@ story_selection:
       "weather_decision": {{
         "level": "<full_segment|one_liner|skip>",
         "rationale": "<why this level>",
-        "forecast_summary": "<today's forecast in one sentence>",
+        "forecast_summary": "<forward-looking: expected conditions, highs/lows, precipitation>",
         "alerts": ["<any active alerts>"]
       }},
       "cut_stories": [
