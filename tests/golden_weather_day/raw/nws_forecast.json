@@ -1,0 +1,26 @@
+[
+  {
+    "source_name": "NWS Forecast",
+    "section": "weather",
+    "type": "forecast",
+    "period_name": "Today",
+    "temperature": 94,
+    "temperature_unit": "F",
+    "wind_speed": "10 to 20 mph",
+    "wind_direction": "SW",
+    "short_forecast": "Hot. Partly sunny, then severe thunderstorms likely after 2pm.",
+    "detailed_forecast": "Dangerously hot conditions with a high near 94. Heat index values as high as 105. Southwest winds 10 to 20 mph. Chance of severe thunderstorms 80 percent after 2pm. Storms may produce damaging winds in excess of 60 mph, large hail up to golf ball size, and heavy rainfall of 1 to 2 inches per hour. A Flash Flood Watch is in effect."
+  },
+  {
+    "source_name": "NWS Forecast",
+    "section": "weather",
+    "type": "forecast",
+    "period_name": "Tonight",
+    "temperature": 72,
+    "temperature_unit": "F",
+    "wind_speed": "5 to 15 mph",
+    "wind_direction": "W",
+    "short_forecast": "Thunderstorms ending by midnight, then mostly cloudy.",
+    "detailed_forecast": "Scattered thunderstorms, some severe, continuing through early evening before diminishing by midnight. Low around 72. West winds 5 to 15 mph."
+  }
+]

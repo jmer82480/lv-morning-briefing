@@ -1,0 +1,67 @@
+# Golden day editorial assertions.
+# These are human-written expectations about what a good briefing should
+# look like given the test fixture data. Used to validate that story selection
+# quality hasn't regressed after prompt or clustering changes.
+
+date: "2026-03-20"
+
+# Stories that MUST be selected (core local stories)
+must_select:
+  - headline_contains: "tax increase"
+    reason: "Lead story — directly impacts Allentown residents, voted last night"
+  - headline_contains: "Bethlehem Steel"
+    reason: "$12M grant for major local redevelopment — affects community"
+  - headline_contains: "breaks ground"
+    reason: "$180M hospital expansion — major local investment (matches both 'LVHN' and 'Lehigh Valley Health Network' headlines)"
+
+# Stories that SHOULD be selected if space allows (ordered by editorial strength)
+should_select:
+  - headline_contains: "opioid settlement"
+    reason: "First settlement payments — affects Allentown, Bethlehem, Easton; higher impact than routine traffic"
+  - headline_contains: "Emmaus bakery"
+    reason: "Community loss — 35-year local business closing"
+  - headline_contains: "MacArthur Road"
+    reason: "Traffic impact — road closure affects commuters (lower priority than opioid settlement)"
+
+# Stories that MUST be cut
+must_cut:
+  - headline_contains: "AP: National housing"
+    reason: "National wire story with no specific Lehigh Valley angle"
+  - headline_contains: "Obituaries"
+    reason: "Not briefing material"
+  - headline_contains: "Phillies"
+    reason: "Sports/national, not local news"
+
+# Clustering expectations
+clustering:
+  # These headlines should cluster together (same underlying story)
+  expected_clusters:
+    - stories:
+        - "Allentown City Council approves 1.5-mill property tax increase"
+        - "Allentown council OKs property tax hike"
+        - "Allentown passes first tax increase in 4 years"
+        - "Allentown approves property tax increase to fund police"
+      reason: "Same council vote covered by all 4 outlets"
+    - stories:
+        - "Bethlehem Steel site redevelopment wins $12M"
+        - "Former Bethlehem Steel site to get $12M"
+        - "State awards $12 million for Bethlehem Steel"
+      reason: "Same grant covered by 3 outlets"
+    - stories:
+        - "LVHN breaks ground on major Easton hospital expansion"
+        - "Lehigh Valley Health Network breaks ground"
+      reason: "Same groundbreaking event"
+    - stories:
+        - "Fire breaks out at Lower Macungie warehouse"
+        - "Early morning fire at Lower Macungie distribution center"
+      reason: "Same fire incident"
+
+# Weather decision
+weather:
+  expected_level: "one_liner"
+  reason: "Partly cloudy, no alerts, no significant impact — unremarkable weather"
+
+# Story count
+expected_story_count:
+  min: 5
+  max: 8

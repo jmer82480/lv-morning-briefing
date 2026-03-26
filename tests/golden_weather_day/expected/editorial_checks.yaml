@@ -1,0 +1,47 @@
+# Golden weather day editorial assertions.
+# Tests a day where severe weather should dominate editorial decisions.
+# 3 active alerts (severe thunderstorm, flash flood watch, excessive heat),
+# combined with routine local news — no breaking hard news.
+
+date: "2026-06-15"
+
+# Stories that should be selected — routine but locally relevant
+must_select:
+  - headline_contains: "Route 22"
+    reason: "Traffic impact amplified by severe weather — commuter relevance"
+  - headline_contains: "cooling centers"
+    reason: "Directly weather-related, public safety, actionable info"
+
+# Stories that can be selected but are lower priority on a weather day
+should_select:
+  - headline_contains: "superintendent"
+    reason: "School board decision — standard local gov coverage"
+  - headline_contains: "zoning"
+    reason: "Local development — community impact"
+
+# Stories that should be cut or deprioritized
+must_cut: []
+  # No must-cut stories in this fixture — all are genuinely local.
+  # But IronPigs and Moravian Academy are lower priority on a severe weather day.
+
+# Clustering expectations
+clustering:
+  expected_clusters:
+    - stories:
+        - "Allentown School Board approves new 3-year superintendent contract"
+        - "Allentown superintendent gets new 3-year deal with performance bonuses"
+      reason: "Same school board vote covered by 2 outlets"
+    - stories:
+        - "PennDOT to close Route 22 eastbound lanes for repaving"
+        - "Route 22 eastbound lane closures begin tonight"
+      reason: "Same PennDOT project covered by 2 outlets"
+
+# Weather decision — THIS IS THE KEY TEST
+weather:
+  expected_level: "full_segment"
+  reason: "3 active alerts: severe thunderstorm warning, flash flood watch, excessive heat warning"
+
+# Story count — fewer stories expected because weather takes more time
+expected_story_count:
+  min: 4
+  max: 7

@@ -1,0 +1,16 @@
+ai:
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 4096
+
+tts:
+  # ElevenLabs voice — use a friendly name (e.g., "adam", "rachel", "daniel")
+  # or a raw voice ID for custom/cloned voices.
+  voice: "adam"
+
+briefing:
+  target_words: 750
+  freshness_hours: 24
+
+clustering:
+  title_similarity_threshold: 75
+  time_window_hours: 6

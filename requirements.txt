@@ -1,0 +1,16 @@
+# Runtime
+feedparser>=6.0,<7
+requests>=2.28,<3
+pyyaml>=6.0,<7
+anthropic>=0.80,<1
+elevenlabs>=2.0,<3
+python-dateutil>=2.8,<3
+python-dotenv>=1.0,<2
+rapidfuzz>=3.0,<4
+
+# UI
+streamlit>=1.30,<2
+
+# Dev / test
+pytest>=8.0,<9
+

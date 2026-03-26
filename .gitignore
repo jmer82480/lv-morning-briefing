@@ -1,8 +1,12 @@
 .env
 __pycache__/
 *.pyc
-raw/
-audio/
-episodes/
-logs/
+raw/*
+normalized/*
+selected/*
+scripts/*
+audio/*
+episodes/*
+logs/*
+!**/.gitkeep
 .DS_Store
